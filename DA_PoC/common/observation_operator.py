@@ -148,6 +148,34 @@ class ObservationOperator:
     def test_obs_and_linearization(self) -> None:
         pass
 
+class LinearObervationOperator(ObservationOperator):
+    def __init__(
+        self, Hmatrix: np.ndarray
+    ) -> None:
+        """
+        :param n: input dimension
+        :type n: int
+        :param m: output dimension
+        :type m: int
+        """
+        m, n = Hmatrix.shape
+        super().__init__(n, m)
+        self.n = n
+        self.m = m
+        self.H = Hmatrix
+
+    @property
+    def H(self) -> np.ndarray:
+        return self._H
+
+    @H.setter
+    def H(self, value: np.ndarray) -> None:
+        assert value.shape == (self.m, self.n)
+        self._H = value
+        self.set_operator(sla.aslinearoperator(self._H))
+
+    def linearized_operator(self, x: np.ndarray) -> sla.LinearOperator:
+        return sla.aslinearoperator(self._H)
 
 class RandomObservationOperator(ObservationOperator):
     def __init__(
@@ -192,10 +220,9 @@ class RandomObservationOperator(ObservationOperator):
     def linearized_operator(self, x: np.ndarray) -> sla.LinearOperator:
         return sla.aslinearoperator(self._H)
 
-
-class IdentityObservationOperator(RandomObservationOperator):
-    def __init__(self, n: int, m: int) -> None:
-        super().__init__(n, m, type="identity", p=0.0)
+class IdentityObservationOperator(LinearObervationOperator):
+    def __init__(self, dim: int) -> None:
+        super().__init__(np.eye(dim))
 
 
 # class LinearObservationOperator(ObservationOperator):
@@ -254,7 +281,3 @@ class IdentityObservationOperator(RandomObservationOperator):
 #             y1 = 1 / (x[1] + delta)
 #         else:
 #             y1 = -1 / (-x[1] + delta)
-
-
-if __name__ == "__main__":
-    pass

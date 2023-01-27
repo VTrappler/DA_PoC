@@ -68,6 +68,17 @@ class Lorenz96Model(Model):
 
     @classmethod
     def construct_tlm_matrix(cls, t0: float, x0: np.ndarray, Nsteps: int) -> np.ndarray:
+        """Construct the TL matrix of dimension
+
+        :param t0: _description_
+        :type t0: float
+        :param x0: _description_
+        :type x0: np.ndarray
+        :param Nsteps: _description_
+        :type Nsteps: int
+        :return: _description_
+        :rtype: np.ndarray
+        """
         t = np.arange(t0, cls.dt * (Nsteps + 1), cls.dt)
         jacobian_matrix = np.empty((cls.dim, (Nsteps + 1), cls.dim))
         for i in range(cls.dim):

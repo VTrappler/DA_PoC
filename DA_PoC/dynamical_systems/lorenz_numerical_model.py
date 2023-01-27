@@ -13,15 +13,11 @@ from copy import deepcopy
 plt.style.use("seaborn-v0_8")
 from .examples.lorenz96 import Lorenz96Model
 from .examples.lorenz63 import Lorenz63Model
-from ..common.numerical_model import NumericalModel
-from ..common.observation_operator import (
+from DA_PoC.common.numerical_model import NumericalModel
+from DA_PoC.common.observation_operator import (
     RandomObservationOperator,
     IdentityObservationOperator,
 )
-
-# Let us set a rng for reproducibility
-rng = np.random.default_rng(seed=93)
-
 
 class LorenzWrapper:
     def __init__(self, state_dimension: int) -> None:
@@ -274,21 +270,6 @@ def quad_function_plot(quad_error, cost_outer, color):
 
 
 
-
-n_cycle = 5
-n_outer = 5
-n_inner = 50
-# np.random.set_state(7071522)
-# DA_vanilla = data_assimilation(
-#     l_model_randobs,
-#     random_obs_operator,
-#     n_cycle,
-#     n_outer,
-#     n_inner,
-#     prec=None,
-#     plot=False,
-# )
-# diagnostic_plots(DA_vanilla, "vanilla")
 
 
 def quad_function_plot(quad_error, cost_outer, color):

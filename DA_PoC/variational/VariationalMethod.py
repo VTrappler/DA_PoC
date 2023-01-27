@@ -145,3 +145,6 @@ class VariationalMethod(DataAssimilationMethod):
             "J": J,
             "time": time,
         }
+
+class ConjugateGradientMethod(VariationalMethod):
+    pass

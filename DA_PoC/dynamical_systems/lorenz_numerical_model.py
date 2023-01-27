@@ -9,6 +9,7 @@ import tqdm
 import scipy.sparse.linalg as sla
 import scipy.optimize
 from copy import deepcopy
+import time
 
 plt.style.use("seaborn-v0_8")
 from .examples.lorenz96 import Lorenz96Model
@@ -17,7 +18,9 @@ from DA_PoC.common.numerical_model import NumericalModel
 from DA_PoC.common.observation_operator import (
     RandomObservationOperator,
     IdentityObservationOperator,
+    ObservationOperator,
 )
+
 
 class LorenzWrapper:
     def __init__(self, state_dimension: int) -> None:
@@ -42,9 +45,7 @@ class LorenzWrapper:
         # ).flatten()
         if nsteps is None:
             nsteps = self.n_total_obs
-        return (
-            self.H(self.lorenz_model.integrate(0, x, nsteps)[1])
-        ).flatten()
+        return (self.H(self.lorenz_model.integrate(0, x, nsteps)[1])).flatten()
 
     def data_misfit(self, x: np.ndarray) -> np.ndarray:
         try:
@@ -146,129 +147,74 @@ def burn_model(n, burn=500):
     return x0_t
 
 
-# x0_t = burn_model()
 
+def create_lorenz_model_observation(
+    lorenz: LorenzWrapper,
+    obs_operator: ObservationOperator,
+    test_consistency=True,
+) -> NumericalModel:
+    """Create a NumericalModel instance implementing the Lorenz system with given observation operator
 
-# GN = lorenz.gauss_newton_matrix(x)
-# plt.imshow(GN)
+    :param lorenz: Lorenz system
+    :type lorenz: LorenzWrapper
+    :param obs_operator: Chosen observation operator
+    :type obs_operator: ObservationOperator
 
-
-def create_lorenz_model_observation(lorenz, m, obs_operator, test=True):
+    :param test_consistency: Should we perform the test to verify the TLM, adj etc, defaults to True
+    :type test_consistency: bool, optional
+    :return: The numerical model associated with the G = H o M
+    :rtype: NumericalModel
+    """
     # obs_operator = IdentityObservationOperator(m, m)
     # m = n * (nobs + 1)
     n = lorenz.state_dimension
+    dim_observation = obs_operator.m
     # print(n)
     # print(f"{lorenz.obs.shape=}")
     # print(f"{lorenz.H=}")
-    l_model = NumericalModel(n, m)
-    l_model.background = lorenz.background
-    l_model.background_error_cov_inv = lorenz.background_error_cov_inv
-    l_model.set_obs(obs_operator(lorenz.obs))
-    l_model.set_forward(lambda x: obs_operator(lorenz.forward_model(x)))
-    l_model.set_observation_operator(obs_operator)
-    l_model.nobs = lorenz.n_total_obs
-    l_model.set_tangent_linear(
+    numerical_model_lorenz = NumericalModel(n, dim_observation)
+    numerical_model_lorenz.background = lorenz.background
+    numerical_model_lorenz.background_error_cov_inv = lorenz.background_error_cov_inv
+    numerical_model_lorenz.set_observation_operator(obs_operator)
+    numerical_model_lorenz.set_obs(obs_operator(lorenz.obs))
+    numerical_model_lorenz.set_forward(lambda x: lorenz.forward_model(x))
+    numerical_model_lorenz.nobs = lorenz.n_total_obs
+    numerical_model_lorenz.set_tangent_linear(
         lambda x: lorenz.tangent_linear_operator(x).matmat(np.eye(n))
     )
     x0_t = np.random.normal(size=n)
     print(f"{lorenz.cost_function(x0_t)=}")
-    print(f"{l_model.cost_function(x0_t)=}")
+    print(f"{numerical_model_lorenz.cost_function(x0_t)=}")
 
-    if test:
-        l_model.tests_consistency()
-
+    if test_consistency:
+        numerical_model_lorenz.tests_consistency()
         x0 = np.zeros(n)
-
-        sp_opt = scipy.optimize.minimize(l_model.cost_function, x0)
+        print(f"Comparison of Scipy method and Gauss Newton/CG method\n")
+        print(f"- scipy")
+        before = time.time()
+        sp_opt = scipy.optimize.minimize(numerical_model_lorenz.cost_function, x0)
+        print(f" - time elapsed: {time.time() - before}s")
         sp_x, sp_fun = sp_opt.x, sp_opt.fun
-        gn_x, gn_fun, n_iter, cost_outer, cost_inner, quad_error = l_model.GNmethod(
-            5 * np.random.normal(size=n),
+        print(f"- GNmethod")
+        before = time.time()
+        (
+            gn_x,
+            gn_fun,
+            n_iter,
+            cost_outer,
+            cost_inner,
+            quad_error,
+            inner_res,
+        ) = numerical_model_lorenz.GNmethod(
+            1 * np.random.normal(size=n),
             n_outer=10,
             n_inner=50,
             verbose=True,
             prec=None,
         )
-
+        print(f" - time elapsed: {time.time() - before}s")
         print(f"{sp_fun=}, {gn_fun=}")
-    return l_model
-
-
-## Get last value ---------
-# m = 2 * n
-
-# random_obs_operator = RandomObservationOperator(n, m, 0.5)
-# random_obs_operator = IdentityObservationOperator(n, m)
-
-# # m = n * (nobs + 1)
-# l_model = NumericalModel(n, m)
-# l_model.set_obs(random_obs_operator(lorenz.obs.reshape(n, -1)[:, -1]))
-# l_model.set_forward(
-#     lambda x: random_obs_operator(lorenz.forward_model(x).reshape(n, -1)[:, -1])
-# )
-# l_model.set_observation_operator(random_obs_operator)
-
-# l_model.set_tangent_linear(
-#     lambda x: lorenz.tangent_linear_operator(x)
-#     .matmat(np.eye(n))
-#     .reshape(n, nobs + 1, n)[:, -1, :]
-# )
-
-# print(f"{lorenz.cost_function(x0_t)=}")
-# print(f"{l_model.cost_function(x0_t)=}")
-
-
-# l_model.tests_consistency()
-
-
-## Alternative observation -----
-
-
-def quad_function_plot(quad_error, cost_outer, color):
-    last = 0
-    plt.scatter(last, cost_outer[0], color=color)
-    for i, inner_it in enumerate(quad_error):
-        outer = np.arange(len(inner_it)) + last
-        plt.plot(outer, inner_it, color=color)
-        last = outer[-1]
-        plt.scatter(last, cost_outer[i + 1], color=color)
-
-
-# obs = obs.reshape(n, nobs)
-
-# analys = l_model.forward(sp_x).reshape(n, nobs)
-# for i in range(n):
-#     plt.subplot(n, 1, i + 1)
-#     plt.plot(obs[i, :], "r.")
-#     plt.plot(analys[i, :])
-# plt.show()
-
-
-# plt.imshow(obs)
-
-
-# def get_next_observations(x_init, sigsq=3, nobs=nobs):
-#     lorenz.n_total_obs = nobs
-#     forw = lorenz.forward_model(x_init)
-#     obs = forw + sigsq * np.random.normal(size=(n * (nobs + 1)))
-#     truth = forw.reshape(n, nobs + 1)
-#     x_t = truth[:, -1]
-#     return obs.reshape(n, nobs + 1), x_t, truth
-
-# def get_next_observations(x_init, modsigsq=0.5, obssigsq=3, nobs=nobs):
-#     lorenz.n_total_obs = nobs
-#     truth = np.empty((n, nobs + 1))
-#     curr_state = x_init
-#     truth[:, 0] = curr_state
-#     for i in range(nobs):
-#         curr_state = lorenz.lorenz_model.integrate(0, curr_state, 1)[1][
-#             :, 1
-#         ] + modsigsq * np.random.normal(size=(n))
-#         truth[:, i + 1] = curr_state
-#     obs = truth + obssigsq * np.random.normal(size=(n, (nobs + 1)))
-#     x_t = truth[:, -1]
-#     return obs, x_t, truth
-
-
+    return numerical_model_lorenz
 
 
 
@@ -280,6 +226,7 @@ def quad_function_plot(quad_error, cost_outer, color):
         plt.plot(outer, inner_it, color=color)
         last = outer[-1]
         plt.scatter(last, cost_outer[i + 1], color=color)
+
 
 
 def plot_quadratic_function(DA, n_cycle, title):
@@ -293,98 +240,3 @@ def plot_quadratic_function(DA, n_cycle, title):
         quad_function_plot(quad_error, cost_outer, col)
     plt.ylim(top=50000)
     plt.title(title)
-    # np.asarray(quad_error).flatten() / quad_error[-1][-1]
-
-
-# plot_quadratic_function(DA_vanilla, n_cycle, "vanilla")
-
-
-# DA_jacobi = data_assimilation(
-#     l_model_randobs,
-#     random_obs_operator,
-#     n_cycle,
-#     n_outer,
-#     n_inner,
-#     prec="jacobi",
-#     plot=False,
-# )
-
-
-# diagnostic_plots(DA_jacobi, "jacobi")
-# plot_quadratic_function(DA_jacobi, n_cycle, "jacobi")
-
-# # div = [2, 4, 8]
-# # l_model.r = n // 4
-# DA_LMP = {}
-# for r_ in [30, 20, 10, 5]:
-#     l_model_randobs.r = r_
-#     DA_LMP[r_] = data_assimilation(
-#         l_model_randobs,
-#         random_obs_operator,
-#         n_cycle,
-#         n_outer,
-#         n_inner,
-#         prec="spectralLMP",
-#         plot=False,
-#     )
-#     diagnostic_plots(DA_LMP[r_], f"spectralLMP, r={r_}")
-#     plot_quadratic_function(DA_LMP[r_], n_cycle, f"spectralLMP, r={r_}")
-
-
-# obs = DA_vanilla["obs_full"]
-# tru = DA_vanilla["truth_full"]
-
-# # U, S, VT = scipy.linalg.svd(obs)
-
-# # plt.plot(1 - S ** 2 / sum(S ** 2))
-# # plt.axhline(0.9)
-# # plt.axhline(0.95)
-# # m_ = np.array(DA_vanilla["n_iter_innerloop"]).T.mean(1)
-# # s_ = np.array(DA_vanilla["n_iter_innerloop"]).T.std(1)
-# # max_ = np.array(DA_vanilla["n_iter_innerloop"]).T.max(1)
-# # min_ = np.array(DA_vanilla["n_iter_innerloop"]).T.min(1)
-
-
-
-
-# plot_innerloopiter(DA_vanilla, "blue", "vanilla")
-# plot_innerloopiter(DA_jacobi, "red", "jacobi")
-# for r_, c_ in zip(
-#     [30, 20, 10, 5],
-#     ["turquoise", "magenta", "orange", "green", "black"],
-# ):
-#     plot_innerloopiter(DA_LMP[r_], c_, f"LMP, r={r_}")
-# plt.legend()
-# plt.grid()
-# plt.show()
-
-
-# for r_ in [30, 20, 10, 5]:
-#     plt.figure()
-#     plot_quadratic_function(DA_LMP[r_], n_cycle, r_)
-
-
-# def plot_optim_gap(DA):
-#     # plt.subplot(1, 2, 1)
-#     plt.plot(np.asarray(DA["cost_outerloop"]) - np.asarray(DA["sp_optimisation"]))
-#     plt.show()
-if __name__ == "__main__":
-    ## Identity observation -----
-
-    n = 100
-    nobs = 10
-    m = n * (nobs + 1)
-    lorenz = LorenzWrapper(n)
-    lorenz.H = lambda x: x
-    lorenz.n_total_obs = nobs
-    lorenz.set_observations(nobs)
-    B_inv_half = np.random.normal(size=(n, n))
-    B_inv = B_inv_half.T @ B_inv_half
-    lorenz.background_error_cov_inv = B_inv
-    lorenz.background = np.random.normal(size=n)
-
-    id_obs_operator = IdentityObservationOperator(m, m)
-    l_model_id = create_lorenz_model_observation(lorenz, m, id_obs_operator, test=False)
-    l_model_id.background = lorenz.background
-    l_model_id.background_error_cov_inv = lorenz.background_error_cov_inv
-    l_model_id.tests_consistency()

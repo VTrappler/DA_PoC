@@ -65,6 +65,7 @@ class NumericalModel:
             self.tangent_linear = lambda x: sla.aslinearoperator(tlm(x))
             self.adjoint = lambda x: sla.aslinearoperator(tlm(x)).adjoint()
         else:
+            print("Observation operator set already")
             self.tangent_linear = lambda x: self.obs_operator.linearized_operator(
                 x
             ) @ sla.aslinearoperator(tlm(x))

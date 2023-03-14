@@ -21,6 +21,24 @@ from DA_PoC.common.observation_operator import (
     ObservationOperator,
 )
 
+def generate_observations(
+    truth, i, state_dimension, sigsqobs, period_assim
+) -> Tuple[float, np.ndarray]:
+    """Generates the "truth" state vector. We perturbate them all
+
+    :param i: dummy variable, indicating the time step
+    :type i: int
+    :return:
+    :rtype: [type]
+    """
+    truth.forward(period_assim)
+    y = truth.state_vector[:, -1] + rng.multivariate_normal(
+        np.zeros(state_dimension), np.eye(state_dimension)
+    ) * np.sqrt(sigsqobs)
+    return truth.t[-1], y
+
+
+
 
 class LorenzWrapper:
     def __init__(self, state_dimension: int) -> None:
@@ -37,6 +55,53 @@ class LorenzWrapper:
         # 0.2 time unit = 24 hours
         self.background_error_cov_inv = None
         self.background = None
+
+
+    @property
+    def background(self):
+        return self._background
+
+    @background.setter
+    def background(self, value):
+        assert ((value is None) or (len(value) == self.state_dimension))
+        self._background = value
+
+
+
+    def create_and_burn_truth(self, burn=2000, x0=None):
+        if x0 is None:
+            x0 = np.zeros(self.state_dimension)
+            x0[0] = 1
+        self.truth = self.lorenz_model()
+        self.truth.set_initial_state(-burn * self.truth.dt, x0)
+        self.truth.forward(burn)
+        
+
+    def generate_obs(self, n_total_obs: int = 100, H: Callable = lambda x: x):
+        """Generate n_total_obs observations
+
+        :param n_total_obs: _description_, defaults to 100
+        :type n_total_obs: int, optional
+        :param H: _description_, defaults to lambdax:x
+        :type H: _type_, optional
+        """
+        self.n_total_obs = n_total_obs
+        obs = np.empty((self.state_dimension, self.n_total_obs))
+        time_obs = np.empty(self.n_total_obs)
+        self.initial_state = self.truth.state_vector[:, -1] + rng.multivariate_normal(
+            np.zeros(self.state_dimension), cov=np.eye(self.state_dimension)
+        )
+
+        for i in range(self.n_total_obs):
+            generated = generate_observations(
+                self.truth, i, self.state_dimension, 1, self.period_assim
+            )
+            time_obs[i], obs[:, i] = generated
+        self.obs = obs
+        self.time_obs = time_obs
+        self.H = H
+
+
 
     def forward_model(self, x: np.ndarray, nsteps=None) -> np.ndarray:
         """Integrates the model over the whole assimilation window"""
@@ -109,6 +174,25 @@ class LorenzWrapper:
         else:
             prior_lin = self.background_error_cov_inv @ (x - self.background)
         return self.adjoint_operator(x).matvec(self.data_misfit(x)) + prior_lin
+
+    def forward_TLM(self, x: np.ndarray, return_base: bool = False):
+        """Computes the forward and the tangent linear
+
+        :param x: initial state vector
+        :type x: np.ndarray
+        :param return_base: Should the method return the forward, defaults to False
+        :type return_base: bool, optional
+        :return: Forward model (if return_bas) and Tangent linear
+        :rtype: Tuple
+        """
+        tlm = self.lorenz_model.construct_tlm_matrix(0, x, self.n_total_obs - 1)
+        if return_base:
+            return self.forward_model(x), tlm
+        else:
+            return tlm
+
+    def forward_steps(self, x: np.ndarray, nsteps):
+        return self.lorenz_model.integrate(0, x, nsteps)[1]
 
     def gauss_newton_matrix(self, x: np.ndarray) -> np.ndarray:
         """Returns the Gauss Newton matrix G^*G"""

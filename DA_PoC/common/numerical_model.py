@@ -301,7 +301,8 @@ class NumericalModel:
         elif callable(prec):
             if side == "left":
                 H = prec(x)
-                return solve_cg(H @ GtG, - H @ self.gradient(x), maxiter=iter_inner)
+                prec_GN = H @ GtG
+                return solve_cg(prec_GN, - H @ self.gradient(x), maxiter=iter_inner)
             elif side == "right":
                 H_R = prec(x)
                 cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
@@ -324,12 +325,19 @@ class NumericalModel:
         n_inner: int = 10,
         verbose: bool = False,
         prec = None,
+        log_file=None,
+        exp_name = None,
+        i_cycle=None
     ) -> Tuple:
         x_curr = x0
-        colnames = ["niter", "f(x)", "CG iter", "log-det", "cond"]
+        colnames = ["#exp", "ncycle", "nouter", "f(x)", "CGiter", "logdet", "cond", "condprec"]
         print(
-            f"{colnames[0].rjust(5)}, {colnames[1].rjust(8)}, {colnames[2].rjust(8)}, {colnames[3].rjust(6)}, {colnames[4].rjust(6)}"
+            f"{colnames[0].rjust(5)}, {colnames[1].rjust(5)}, {colnames[2].rjust(5)}, {colnames[3].rjust(8)}, {colnames[4].rjust(8)}, {colnames[5].rjust(6)}, {colnames[6].rjust(6)}, {colnames[7].rjust(6)}"
         )
+        if log_file is not None:
+            with open(log_file, 'a+') as fhandle:
+                fhandle.write(", ".join(colnames))
+                fhandle.write('\n')
         n_iter = np.empty(n_outer)
         fun = np.empty(n_outer + 1)
         fun[0] = self.cost_function(x_curr)
@@ -376,8 +384,13 @@ class NumericalModel:
                     slogdet = 0, 0
                     cond = 0
                 print(
-                    f"{i_outer:>5}, {cfun:>8.4f}, {prev_n_inner_loop:>8d}, {slogdet[1]:>6.2f}, {cond:>6.4e}"
+                    f"{exp_name}, {i_cycle:>5}, {i_outer:>5}, {cfun:>8.4f}, {prev_n_inner_loop:>8d}, {slogdet[1]:>6.2f}, {cond:>6.4e}, {res['cond']:>6.4e}"
                 )
+                to_write = f"{exp_name}, {i_cycle}, {i_outer}, {cfun}, {prev_n_inner_loop}, {slogdet[1]}, {cond}, {res['cond']}"
+
+                with open(log_file, 'a+') as fhandle:
+                    fhandle.write(to_write)
+                    fhandle.write('\n')
             n_iter[i_outer] = prev_n_inner_loop
             fun[i_outer + 1] = cfun
         return x_curr, self.cost_function(x_curr), n_iter, fun, cost_inner, quad_error, inner_res

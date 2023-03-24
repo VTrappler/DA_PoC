@@ -21,13 +21,14 @@ class Incremental4DVarCG(VariationalMethod):
         bounds: np.ndarray,
         numerical_model,
         observation_operator,
-        x0_t,
+        x0_t: np.ndarray,
         get_next_observations,
         n_cycle: int,
         n_outer: int,
         n_inner: int,
-        prec,
+        prec: dict,
         plot: bool,
+        log_append: bool
     ) -> None:
         super().__init__(state_dimension, bounds)
         self.numerical_model = numerical_model
@@ -40,6 +41,8 @@ class Incremental4DVarCG(VariationalMethod):
         self.preconditioner = prec
         self.plot = plot
         self.run_summary = None
+        self.GNlog_file = None
+        self.exp_name = None
 
     def run(self, n_cycle: int = None, verbose=False) -> dict:
         if n_cycle is not None:
@@ -79,6 +82,9 @@ class Incremental4DVarCG(VariationalMethod):
                 n_inner=self.n_inner,
                 verbose=True,
                 prec=self.preconditioner,
+                log_file=self.GNlog_file,
+                exp_name=self.exp_name,
+                i_cycle=i_cycle
             )
             innerloop_residual_cycle.append(inner_res)
             n_iter_innerloop.append(n_iter_inner)

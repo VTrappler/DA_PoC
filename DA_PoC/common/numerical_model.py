@@ -332,7 +332,7 @@ class NumericalModel:
         x_curr = x0
         colnames = ["#exp", "ncycle", "nouter", "f(x)", "CGiter", "logdet", "cond", "condprec"]
         print(
-            f"{colnames[0].rjust(5)}, {colnames[1].rjust(5)}, {colnames[2].rjust(5)}, {colnames[3].rjust(8)}, {colnames[4].rjust(8)}, {colnames[5].rjust(6)}, {colnames[6].rjust(6)}, {colnames[7].rjust(6)}"
+            f"{colnames[0].rjust(8)}, {colnames[1].rjust(5)}, {colnames[2].rjust(5)}, {colnames[3].rjust(8)}, {colnames[4].rjust(8)}, {colnames[5].rjust(6)}, {colnames[6].rjust(8)}, {colnames[7].rjust(8)}"
         )
         if log_file is not None:
             with open(log_file, 'a+') as fhandle:
@@ -359,16 +359,16 @@ class NumericalModel:
             GtG = sla.aslinearoperator(self.gauss_newton_hessian_matrix(x_curr)).matmat(
                 np.eye(self.n)
             )
-            dx_star = np.linalg.solve(GtG, -self.gradient(x_curr))
-            delta_x = np.asarray(res["x_list"]) - dx_star
-            sq_err = 0.5 * np.diag(delta_x @ GtG @ delta_x.T) + self.cost_function(
-                x_curr + dx_star
-            )
-            quad_error.append(sq_err)
+            # dx_star = np.linalg.solve(GtG, -self.gradient(x_curr))
+            # delta_x = np.asarray(res["x_list"]) - dx_star
+            # sq_err = 0.5 * np.diag(delta_x @ GtG @ delta_x.T) + self.cost_function(
+            #     x_curr + dx_star
+            # )
+            # quad_error.append(sq_err)
             prev_n_inner_loop = res["niter"]
             cost_inner.append(res["cost_inner"])
-            x_curr += dx
             cfun = self.cost_function(x_curr)
+            fun[i_outer] = cfun
             if verbose:
                 GtG = self.gauss_newton_hessian_matrix(x_curr, bck_prec=(prec_name == "bck"))
                 if prec_name == "bck":
@@ -384,7 +384,9 @@ class NumericalModel:
                     slogdet = 0, 0
                     cond = 0
                 print(
-                    f"{exp_name}, {i_cycle:>5}, {i_outer:>5}, {cfun:>8.4f}, {prev_n_inner_loop:>8d}, {slogdet[1]:>6.2f}, {cond:>6.4e}, {res['cond']:>6.4e}"
+                    f"{exp_name:>8}, {i_cycle:>5}, {i_outer:>5}, "
+                    f"{cfun:>8.4f}, {prev_n_inner_loop:>8d}, "
+                    f"{slogdet[1]:>6.2f}, {cond:>6.3e}, {res['cond']:>6.3e}"
                 )
                 to_write = f"{exp_name}, {i_cycle}, {i_outer}, {cfun}, {prev_n_inner_loop}, {slogdet[1]}, {cond}, {res['cond']}"
 
@@ -392,7 +394,11 @@ class NumericalModel:
                     fhandle.write(to_write)
                     fhandle.write('\n')
             n_iter[i_outer] = prev_n_inner_loop
-            fun[i_outer + 1] = cfun
+            if np.isnan(cfun).any():
+                print('--reset')
+                x_curr = np.random.normal(size=x0.shape)
+            else:
+                x_curr += dx
         return x_curr, self.cost_function(x_curr), n_iter, fun, cost_inner, quad_error, inner_res
 
 

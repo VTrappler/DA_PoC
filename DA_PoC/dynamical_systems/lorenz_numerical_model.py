@@ -20,7 +20,7 @@ from DA_PoC.common.observation_operator import (
     IdentityObservationOperator,
     ObservationOperator,
 )
-
+rng = np.random.default_rng()
 def generate_observations(
     truth, i, state_dimension, sigsqobs, period_assim
 ) -> Tuple[float, np.ndarray]:

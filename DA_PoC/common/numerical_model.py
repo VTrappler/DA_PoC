@@ -1,3 +1,4 @@
+import logging
 import scipy.sparse.linalg as sla
 import numpy as np
 
@@ -285,6 +286,7 @@ class NumericalModel:
     ) -> Tuple[np.ndarray, dict]:
 
         GtG = self.gauss_newton_hessian_matrix(x, bck_prec=(prec == "bck"))
+        logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
         try:
             GtG = GtG.matmat(np.eye(self.n))
         except AttributeError:
@@ -302,11 +304,22 @@ class NumericalModel:
             if side == "left":
                 H = prec(x)
                 prec_GN = H @ GtG
-                return solve_cg(prec_GN, - H @ self.gradient(x), maxiter=iter_inner)
+                logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
+                return solve_cg(prec_GN, -H @ self.gradient(x), maxiter=iter_inner)
             elif side == "right":
                 H_R = prec(x)
+                prec_GN = GtG @ H_R
+                logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
                 cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
                 return H_R @ cg_solution[0], cg_solution[1]
+            elif side == "deflation":
+                projector = prec(x)
+                b = -self.gradient(x)
+                second_term = projector @ b
+                orth_proj = np.eye(self.n) - projector
+                A_matrix = GtG @ orth_proj
+                cg_solution = solve_cg(A_matrix, orth_proj.T @ b, maxiter=iter_inner)
+                return cg_solution[0] + second_term, cg_solution[1]
         elif prec == "bck":
             # B = UUT
             prec_mat = (
@@ -324,20 +337,29 @@ class NumericalModel:
         n_outer: int = 3,
         n_inner: int = 10,
         verbose: bool = False,
-        prec = None,
+        prec=None,
         log_file=None,
-        exp_name = None,
-        i_cycle=None
+        exp_name=None,
+        i_cycle=None,
     ) -> Tuple:
         x_curr = x0
-        colnames = ["#exp", "ncycle", "nouter", "f(x)", "CGiter", "logdet", "cond", "condprec"]
+        colnames = [
+            "#exp",
+            "ncycle",
+            "nouter",
+            "f(x)",
+            "CGiter",
+            "logdet",
+            "cond",
+            "condprec",
+        ]
         print(
             f"{colnames[0].rjust(8)}, {colnames[1].rjust(5)}, {colnames[2].rjust(5)}, {colnames[3].rjust(8)}, {colnames[4].rjust(8)}, {colnames[5].rjust(6)}, {colnames[6].rjust(8)}, {colnames[7].rjust(8)}"
         )
         if log_file is not None:
-            with open(log_file, 'a+') as fhandle:
+            with open(log_file, "a+") as fhandle:
                 fhandle.write(", ".join(colnames))
-                fhandle.write('\n')
+                fhandle.write("\n")
         n_iter = np.empty(n_outer)
         fun = np.empty(n_outer + 1)
         fun[0] = self.cost_function(x_curr)
@@ -345,8 +367,8 @@ class NumericalModel:
             prec_name = prec
             side = "left"
         elif isinstance(prec, dict):
-            prec_name = prec['prec_name']
-            side = prec['side']
+            prec_name = prec["prec_name"]
+            side = prec["side"]
         elif prec is None:
             prec_name = None
             side = None
@@ -370,7 +392,9 @@ class NumericalModel:
             cfun = self.cost_function(x_curr)
             fun[i_outer] = cfun
             if verbose:
-                GtG = self.gauss_newton_hessian_matrix(x_curr, bck_prec=(prec_name == "bck"))
+                GtG = self.gauss_newton_hessian_matrix(
+                    x_curr, bck_prec=(prec_name == "bck")
+                )
                 if prec_name == "bck":
                     GtG = (
                         np.eye(self.n)
@@ -390,34 +414,51 @@ class NumericalModel:
                 )
                 to_write = f"{exp_name}, {i_cycle}, {i_outer}, {cfun}, {prev_n_inner_loop}, {slogdet[1]}, {cond}, {res['cond']}"
 
-                with open(log_file, 'a+') as fhandle:
+                with open(log_file, "a+") as fhandle:
                     fhandle.write(to_write)
-                    fhandle.write('\n')
+                    fhandle.write("\n")
             n_iter[i_outer] = prev_n_inner_loop
             if np.isnan(cfun).any():
-                print('--reset')
+                print("--reset")
                 x_curr = np.random.normal(size=x0.shape)
             else:
                 x_curr += dx
-        return x_curr, self.cost_function(x_curr), n_iter, fun, cost_inner, quad_error, inner_res
+        return {
+            "gn_x": x_curr,
+            "gn_fun": self.cost_function(x_curr),
+            "niter_inner": n_iter,
+            "cost_outer": fun,
+            "cost_inner": cost_inner,
+            "quad_error": quad_error,
+            "inner_residual": inner_res,
+        }
+        # return (
+        #     x_curr,
+        #     self.cost_function(x_curr),
+        #     n_iter,
+        #     fun,
+        #     cost_inner,
+        #     quad_error,
+        #     inner_res,
+        # )
 
 
 def generate_marginal_obs_operator(
-    H: np.ndarray, marginal,_func: Callable, linearized_marginal_func: Callable
+    H: np.ndarray, marginal, _func: Callable, linearized_marginal_func: Callable
 ) -> ObservationOperator:
     # H = np.random.binomial(1, p, np.prod(shape)).reshape(shape)
     obs_op = ObservationOperator(H.shape[0], H.shape[1])
-    obs_op.set_operator(lambda x: H @ marginal_func(x))
+    # obs_op.set_operator(lambda x: H @ marginal_func(x))
     obs_op.set_linearized(lambda x: H @ linearized_marginal_func(x))
     return obs_op
 
 
 def f(x):
-    return 1 / (x ** 2 + 1)
+    return 1 / (x**2 + 1)
 
 
 def fprime(x):
-    return np.diag(-(2 * x) / (x ** 2 + 1) ** 2)
+    return np.diag(-(2 * x) / (x**2 + 1) ** 2)
 
 
 if __name__ == "__main__":

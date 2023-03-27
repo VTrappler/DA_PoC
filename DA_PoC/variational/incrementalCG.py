@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from .VariationalMethod import VariationalMethod
 
+
 def pad_ragged(list_of_arr):
     max_len = 0
     for arr in list_of_arr:
@@ -13,6 +14,7 @@ def pad_ragged(list_of_arr):
             arr, (0, max_len - len(arr)), "constant", constant_values=(np.nan)
         )
     return array
+
 
 class Incremental4DVarCG(VariationalMethod):
     def __init__(
@@ -28,7 +30,7 @@ class Incremental4DVarCG(VariationalMethod):
         n_inner: int,
         prec: dict,
         plot: bool,
-        log_append: bool
+        log_append: bool,
     ) -> None:
         super().__init__(state_dimension, bounds)
         self.numerical_model = numerical_model
@@ -68,15 +70,7 @@ class Incremental4DVarCG(VariationalMethod):
             truth = truth[:, 1:]
 
             self.numerical_model.set_obs(self.observation_operator(obs.reshape(-1)))
-            (
-                gn_x,
-                gn_fun,
-                n_iter_inner,
-                cost_outer,
-                cost_inner,
-                quad_error,
-                inner_res,
-            ) = self.numerical_model.GNmethod(
+            gauss_newton_dict = self.numerical_model.GNmethod(
                 x0_optim,
                 n_outer=self.n_outer,
                 n_inner=self.n_inner,
@@ -84,14 +78,17 @@ class Incremental4DVarCG(VariationalMethod):
                 prec=self.preconditioner,
                 log_file=self.GNlog_file,
                 exp_name=self.exp_name,
-                i_cycle=i_cycle
+                i_cycle=i_cycle,
             )
-            innerloop_residual_cycle.append(inner_res)
-            n_iter_innerloop.append(n_iter_inner)
-            cost_outerloop.append(cost_outer)
+            gn_x = gauss_newton_dict["gn_x"]
+            # gn_fun = gauss_newton_dict["gn_fun"]
+            # cost_inner = gauss_newton_dict["cost_inner"]
+            quad_errors.append(gauss_newton_dict["quad_error"])
+            innerloop_residual_cycle.append(gauss_newton_dict["inner_residual"])
+            n_iter_innerloop.append(gauss_newton_dict["niter_inner"])
+            cost_outerloop.append(gauss_newton_dict["cost_outer"])
             # sp_optim = scipy.optimize.minimize(self.numerical_model.cost_function, x0=x0_optim)
             # sp_optimisation.append(sp_optim.fun)
-            quad_errors.append(quad_error)
             analysis = self.numerical_model.forward_no_obs(gn_x).reshape(
                 self.state_dimension, -1
             )[:, 1:]
@@ -105,7 +102,7 @@ class Incremental4DVarCG(VariationalMethod):
                 print(f"{analysis_full.shape=}")
                 print(f"{truth.shape=}")
                 print(f"{truth_full.shape=}")
-        
+
             analysis_full[:, t_cycle] = analysis
             truth_full[:, t_cycle] = truth
             # obs_full[:, t_cycle] = obs[:, 1:]
@@ -133,20 +130,21 @@ class Incremental4DVarCG(VariationalMethod):
         }
         return self.run_summary
 
-    def diagnostic_plots(self, title: str =''):
+    def diagnostic_plots(self, title: str = ""):
         if self.run_summary is None:
-            raise RuntimeError('No stored data')
+            raise RuntimeError("No stored data")
         truth_full, obs_full, analysis_full = (
-        self.run_summary["truth_full"],
-        self.run_summary["obs_full"],
-        self.run_summary["analysis_full"],
-    )
+            self.run_summary["truth_full"],
+            self.run_summary["obs_full"],
+            self.run_summary["analysis_full"],
+        )
         plt.subplot(1, 3, 1)
         plt.plot(
             ((truth_full - obs_full) ** 2).mean(0), label="Observation error (wrt obs)"
         )
         plt.plot(
-            ((analysis_full - truth_full) ** 2).mean(0), label="Analysis error (wrt truth)"
+            ((analysis_full - truth_full) ** 2).mean(0),
+            label="Analysis error (wrt truth)",
         )
         plt.legend()
         plt.subplot(1, 3, 2)
@@ -164,11 +162,12 @@ class Incremental4DVarCG(VariationalMethod):
         plt.suptitle(f"{title}")
         plt.show()
 
-    def plot_innerloopiter(self, color: str = 'blue', label: str =''):
+    def plot_innerloopiter(self, color: str = "blue", label: str = ""):
         ninnerloop = self.run_summary["n_iter_innerloop"]
         n_outer = len(ninnerloop[0])
         m_, s_, max_, min_ = (
-            func(np.asarray(ninnerloop).T, 1) for func in [np.mean, np.std, np.max, np.min]
+            func(np.asarray(ninnerloop).T, 1)
+            for func in [np.mean, np.std, np.max, np.min]
         )
         x_ = np.arange(n_outer) + 1
         plt.plot(x_, m_, color=color, alpha=1, label=label)
@@ -176,9 +175,11 @@ class Incremental4DVarCG(VariationalMethod):
         plt.plot(x_, max_, color=color, ls=":")
         plt.plot(x_, min_, color=color, ls=":")
 
-    def plot_residuals_inner_loop(self, color: str ='blue', label: str = '', nostats=False, cumulative=False):
+    def plot_residuals_inner_loop(
+        self, color: str = "blue", label: str = "", nostats=False, cumulative=False
+    ):
         if self.run_summary is None:
-            raise RuntimeError('No stored data')
+            raise RuntimeError("No stored data")
         residuals = []
         for cy in self.run_summary["inner_res_cycle"]:
             for out in cy:
@@ -188,9 +189,10 @@ class Incremental4DVarCG(VariationalMethod):
         iters = np.arange(residuals.shape[1])
         if nostats:
             for i, res in enumerate(residuals):
-                plt.plot(res, color=plt.get_cmap('viridis')(i/len(residuals)))
+                plt.plot(res, color=plt.get_cmap("viridis")(i / len(residuals)))
         else:
             import scipy.stats
+
             plt.plot(residuals.T, color=color, alpha=0.1)
             geom_mean = np.exp(np.nanmean(np.log(residuals), 0))
             sd = np.nanstd(np.log(residuals), 0)
@@ -217,7 +219,7 @@ class Incremental4DVarCG(VariationalMethod):
             )
             if cumulative:
                 ax2 = plt.gca().twinx()
-                ax2.plot(np.isnan(residuals).mean(0), color=color, linestyle=':')
+                ax2.plot(np.isnan(residuals).mean(0), color=color, linestyle=":")
                 ax2.grid(None)
                 ax2.set_ylim([0, 1])
         return residuals
@@ -233,6 +235,7 @@ class Incremental4DVarCG(VariationalMethod):
 
 
 ## Backward compatibility ?
+
 
 def data_assimilation(
     l_model,

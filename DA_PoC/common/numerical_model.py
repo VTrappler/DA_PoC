@@ -313,13 +313,18 @@ class NumericalModel:
                 cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
                 return H_R @ cg_solution[0], cg_solution[1]
             elif side == "deflation":
-                projector = prec(x)
                 b = -self.gradient(x)
-                second_term = projector @ b
-                orth_proj = np.eye(self.n) - projector
-                A_matrix = GtG @ orth_proj
-                cg_solution = solve_cg(A_matrix, orth_proj.T @ b, maxiter=iter_inner)
-                return cg_solution[0] + second_term, cg_solution[1]
+
+                Sr, Ur = prec(x)
+                logging.info(f"{Sr=}")
+                pi_A = Ur @ Ur.T
+                pi_U = Ur @ np.diag(Sr ** (-1)) @ Ur.T
+                pi_A_orth = np.eye(self.n) - pi_A
+                pi_A_x = pi_U @ b
+
+                A_matrix = GtG @ pi_A_orth
+                cg_solution = solve_cg(A_matrix, pi_A_orth.T @ b, maxiter=iter_inner)
+                return cg_solution[0] + pi_A_x, cg_solution[1]
         elif prec == "bck":
             # B = UUT
             prec_mat = (

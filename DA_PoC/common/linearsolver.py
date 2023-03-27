@@ -1,6 +1,12 @@
 import numpy as np
 
 # import torch
+class OrthogonalProjector:
+    def __init__(self, A: np.ndarray, W: np.ndarray):
+        self.W = W
+        self.A = A
+        self.normalizing_matrix = np.linalg.inv(self.W.T @ self.A @ self.W)
+        self.projection_matrix = self.W @ self.normalizing_matrix @ self.W.T
 
 
 def conjGrad(
@@ -36,7 +42,7 @@ def conjGrad(
         cond = np.inf
     if verbose:
         print(f"Condition number of A: {cond}")
-    while (np.sqrt(np.sum((r ** 2))) >= tol) and (it < maxiter):
+    while (np.sqrt(np.sum((r**2))) >= tol) and (it < maxiter):
         Ap = A.dot(p)
         alpha = np.dot(p, r) / np.dot(p, Ap)
         x = x + alpha * p
@@ -44,7 +50,7 @@ def conjGrad(
         beta = -np.dot(r, Ap) / np.dot(p, Ap)
         p = r + beta * p
         it += 1
-        norm_res_ = np.sqrt(np.sum((r ** 2)))
+        norm_res_ = np.sqrt(np.sum((r**2)))
         norm_res.append(norm_res_)
         cost_inner.append(np.sum(r * x))
         x_list.append(x)
@@ -60,7 +66,80 @@ def conjGrad(
         "norm_res": norm_res,
         "cost_inner": cost_inner,
         "x_list": x_list,
-        "cond": cond
+        "cond": cond,
+    }
+    return x, result_dict
+
+
+def deflated_conjGrad(
+    A: np.ndarray,
+    x: np.ndarray,
+    b: np.ndarray,
+    W: np.ndarray,
+    tol: float,
+    maxiter: int,
+    verbose=False,
+):
+    """Solves Ax = b with Deflated Conjugate Gradient method
+
+    :param A: Matrix to inverse
+    :type A: np.ndarray
+    :param x: First guess of the solution
+    :type x: np.ndarray
+    :param b: Expected solution of Ax
+    :type b: np.ndarray
+    :param W: full column rank matrix
+    :type W: np.ndarray
+    :param tol: tolerance
+    :type tol: float
+    :param maxiter: maximum number of iterations
+    :type maxiter: int
+    :param verbose: _description_, defaults to False
+    :type verbose: bool, optional
+    :return: _description_
+    :rtype: _type_
+    """
+    projection = W.T @ A @ W
+    inv_projection = np.linalg.inv(projection)
+    r = b - A.dot(x)
+    x = x + W @ inv_projection @ W.T @ r
+    p = r.copy()
+    residuals = [r]
+    x_list = [x]
+    norm_res = []
+    it = 0
+    cost_inner = [np.sum(r * x)]
+    try:
+        cond = np.linalg.cond(A)
+    except np.linalg.LinAlgError:
+        cond = np.inf
+    if verbose:
+        print(f"Condition number of A: {cond}")
+    while (np.sqrt(np.sum((r**2))) >= tol) and (it < maxiter):
+        Ap = A.dot(p)
+        alpha = np.dot(p, r) / np.dot(p, Ap)
+        x = x + alpha * p
+        r = b - A.dot(x)
+        beta = -np.dot(r, Ap) / np.dot(p, Ap)
+        p = r + beta * p
+        it += 1
+        norm_res_ = np.sqrt(np.sum((r**2)))
+        norm_res.append(norm_res_)
+        cost_inner.append(np.sum(r * x))
+        x_list.append(x)
+        residuals.append(r)
+        if verbose and it % 20 == 0:
+            print(f"It: {it:>5}, ||r|| = {norm_res_}")
+    if verbose:
+        print(f"It: {it:>5}, ||r|| = {norm_res_}")
+    result_dict = {
+        "success": it != maxiter,
+        "niter": it,
+        "residuals": residuals,
+        "norm_res": norm_res,
+        "cost_inner": cost_inner,
+        "x_list": x_list,
+        "cond": cond,
     }
     return x, result_dict
 
@@ -178,7 +257,7 @@ def solve_cg_LMP(A, b, r, maxiter=None, verbose=False):
 
 if __name__ == "__main__":
     n = 500
-    A_ = np.random.normal(size=(n ** 2)).reshape(n, n)
+    A_ = np.random.normal(size=(n**2)).reshape(n, n)
     A = A_.T @ A_
     # A = np.array(
     #     [
@@ -198,7 +277,6 @@ if __name__ == "__main__":
     x_cg, res = conjGrad(A, x0, b, 1e-9, n, True)
     # x_cg_jacobi, res = solve_cg_jacobi(A, b, maxiter=n, verbose=True)
     # x_cg_lmp, res = solve_cg_LMP(A, b, r=n // 2, maxiter=n, verbose=True)
-
 
     # L = icholesky(A)
     # L = incomplete_cholesky_factorization(A)

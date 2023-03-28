@@ -286,7 +286,7 @@ class NumericalModel:
     ) -> Tuple[np.ndarray, dict]:
 
         GtG = self.gauss_newton_hessian_matrix(x, bck_prec=(prec == "bck"))
-        logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
+        # logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
         try:
             GtG = GtG.matmat(np.eye(self.n))
         except AttributeError:
@@ -304,18 +304,18 @@ class NumericalModel:
             if prec_type == "left":
                 H = prec(x)
                 prec_GN = H @ GtG
-                logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
+                # logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
                 return solve_cg(prec_GN, -H @ self.gradient(x), maxiter=iter_inner)
             elif prec_type == "right":
                 H_R = prec(x)
                 prec_GN = GtG @ H_R
-                logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
+                # logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
                 cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
                 return H_R @ cg_solution[0], cg_solution[1]
             elif prec_type == "deflation":
                 b = -self.gradient(x)
                 Sr, Ur = prec(x)
-                logging.info(f"{Sr=}")
+                # logging.info(f"{Sr=}")
                 pi_A = Ur @ Ur.T
                 pi_U = Ur @ np.diag(Sr ** (-1)) @ Ur.T
                 pi_A_orth = np.eye(self.n) - pi_A

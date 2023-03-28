@@ -20,7 +20,10 @@ from DA_PoC.common.observation_operator import (
     IdentityObservationOperator,
     ObservationOperator,
 )
+
 rng = np.random.default_rng()
+
+
 def generate_observations(
     truth, i, state_dimension, sigsqobs, period_assim
 ) -> Tuple[float, np.ndarray]:
@@ -36,8 +39,6 @@ def generate_observations(
         np.zeros(state_dimension), np.eye(state_dimension)
     ) * np.sqrt(sigsqobs)
     return truth.t[-1], y
-
-
 
 
 class LorenzWrapper:
@@ -56,17 +57,14 @@ class LorenzWrapper:
         self.background_error_cov_inv = None
         self.background = None
 
-
     @property
     def background(self):
         return self._background
 
     @background.setter
     def background(self, value):
-        assert ((value is None) or (len(value) == self.state_dimension))
+        assert (value is None) or (len(value) == self.state_dimension)
         self._background = value
-
-
 
     def create_and_burn_truth(self, burn=2000, x0=None):
         if x0 is None:
@@ -75,7 +73,6 @@ class LorenzWrapper:
         self.truth = self.lorenz_model()
         self.truth.set_initial_state(-burn * self.truth.dt, x0)
         self.truth.forward(burn)
-        
 
     def generate_obs(self, n_total_obs: int = 100, H: Callable = lambda x: x):
         """Generate n_total_obs observations
@@ -100,8 +97,6 @@ class LorenzWrapper:
         self.obs = obs
         self.time_obs = time_obs
         self.H = H
-
-
 
     def forward_model(self, x: np.ndarray, nsteps=None) -> np.ndarray:
         """Integrates the model over the whole assimilation window"""
@@ -191,7 +186,7 @@ class LorenzWrapper:
         else:
             return tlm
 
-    def forward_steps(self, x: np.ndarray, nsteps):
+    def forward_steps(self, x: np.ndarray, nsteps: int):
         return self.lorenz_model.integrate(0, x, nsteps)[1]
 
     def gauss_newton_matrix(self, x: np.ndarray) -> np.ndarray:
@@ -204,14 +199,43 @@ class LorenzWrapper:
         else:
             return tlm.T @ tlm + self.background_error_cov_inv
 
-    def set_observations(self, nobs: int = 10, burn: int = 500) -> None:
+    def get_next_observation(
+        self, x_init: np.ndarray, model_error_sqrt: float, obs_error_sqrt: float
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        n = self.state_dimension
+        truth = np.empty((n, self.n_total_obs + 1))
+        curr_state = x_init
+        truth[:, 0] = curr_state
+        for i in range(self.n_total_obs):
+            curr_state = self.lorenz_model.integrate(0, curr_state, 1)[1][
+                :, 1
+            ] + model_error_sqrt * np.random.normal(size=(n))
+            truth[:, i + 1] = curr_state
+        obs = truth + obs_error_sqrt * np.random.normal(
+            size=(n, (self.n_total_obs + 1))
+        )
+        x_t = truth[:, -1]
+        return obs, x_t, truth
+
+    def set_observations(
+        self, nobs: int = 10, burn: int = 500, obs_error_sqrt: float = 1.0
+    ) -> None:
+        """Set instance attribute self.obs, by runnin the model with burn in time
+
+        :param nobs: numbr of observed timesteps, defaults to 10
+        :type nobs: int, optional
+        :param burn: number of timesteps before recording, defaults to 500
+        :type burn: int, optional
+        :param obs_error_sqrt: std deviation of the observation error
+        :type obs_error_sqrt: float, optional
+        """
         x = np.random.normal(size=self.state_dimension) * 5
         self.n_total_obs = burn
         self.H = lambda x: x
         burn_in = self.forward_model(x).reshape(self.state_dimension, -1)
         x0_t = burn_in[:, -1]
         self.n_total_obs = nobs
-        obs = self.forward_model(x0_t) + 1.0 * np.random.normal(
+        obs = self.forward_model(x0_t) + obs_error_sqrt * np.random.normal(
             size=(self.state_dimension * (1 + self.n_total_obs))
         )
         self.obs = obs
@@ -229,7 +253,6 @@ def burn_model(n, burn=500):
     burn_in = lorenz.forward_model(x).reshape(n, -1)
     x0_t = burn_in[:, -1]
     return x0_t
-
 
 
 def create_lorenz_model_observation(
@@ -301,7 +324,6 @@ def create_lorenz_model_observation(
     return numerical_model_lorenz
 
 
-
 def quad_function_plot(quad_error, cost_outer, color):
     last = 0
     plt.scatter(last, cost_outer[0], color=color)
@@ -310,7 +332,6 @@ def quad_function_plot(quad_error, cost_outer, color):
         plt.plot(outer, inner_it, color=color)
         last = outer[-1]
         plt.scatter(last, cost_outer[i + 1], color=color)
-
 
 
 def plot_quadratic_function(DA, n_cycle, title):

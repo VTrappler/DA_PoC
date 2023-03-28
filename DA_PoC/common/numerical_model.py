@@ -282,7 +282,7 @@ class NumericalModel:
         x: np.ndarray,
         iter_inner: int = 10,
         prec: Optional[Union[str, Callable]] = None,
-        side: str = "left",
+        prec_type: str = "left",
     ) -> Tuple[np.ndarray, dict]:
 
         GtG = self.gauss_newton_hessian_matrix(x, bck_prec=(prec == "bck"))
@@ -301,20 +301,19 @@ class NumericalModel:
         elif prec == "spectralLMP":
             return solve_cg_LMP(GtG, -self.gradient(x), r=self.r, maxiter=iter_inner)
         elif callable(prec):
-            if side == "left":
+            if prec_type == "left":
                 H = prec(x)
                 prec_GN = H @ GtG
                 logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
                 return solve_cg(prec_GN, -H @ self.gradient(x), maxiter=iter_inner)
-            elif side == "right":
+            elif prec_type == "right":
                 H_R = prec(x)
                 prec_GN = GtG @ H_R
                 logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
                 cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
                 return H_R @ cg_solution[0], cg_solution[1]
-            elif side == "deflation":
+            elif prec_type == "deflation":
                 b = -self.gradient(x)
-
                 Sr, Ur = prec(x)
                 logging.info(f"{Sr=}")
                 pi_A = Ur @ Ur.T
@@ -370,18 +369,20 @@ class NumericalModel:
         fun[0] = self.cost_function(x_curr)
         if isinstance(prec, str):
             prec_name = prec
-            side = "left"
+            prec_type = "left"
         elif isinstance(prec, dict):
             prec_name = prec["prec_name"]
-            side = prec["side"]
+            prec_type = prec["prec_type"]
         elif prec is None:
             prec_name = None
-            side = None
+            prec_type = None
         cost_inner = []
         quad_error = []
         inner_res = []
         for i_outer in range(n_outer):
-            dx, res = self.solve_innerloop(x_curr, n_inner, prec_name, side=side)
+            dx, res = self.solve_innerloop(
+                x_curr, n_inner, prec_name, prec_type=prec_type
+            )
             inner_res.append(res)
             GtG = sla.aslinearoperator(self.gauss_newton_hessian_matrix(x_curr)).matmat(
                 np.eye(self.n)

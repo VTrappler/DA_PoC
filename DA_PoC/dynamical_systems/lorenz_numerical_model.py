@@ -199,7 +199,7 @@ class LorenzWrapper:
         else:
             return tlm.T @ tlm + self.background_error_cov_inv
 
-    def get_next_observation(
+    def get_next_observations(
         self, x_init: np.ndarray, model_error_sqrt: float, obs_error_sqrt: float
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         n = self.state_dimension

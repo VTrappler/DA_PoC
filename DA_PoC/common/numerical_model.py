@@ -3,7 +3,7 @@ import scipy.sparse.linalg as sla
 import numpy as np
 
 from .observation_operator import ObservationOperator
-from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP
+from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP, conjGrad
 from typing import Callable, Tuple, Optional, List, Union
 
 
@@ -324,6 +324,23 @@ class NumericalModel:
                 A_matrix = GtG @ pi_A_orth
                 cg_solution = solve_cg(A_matrix, pi_A_orth.T @ b, maxiter=iter_inner)
                 return cg_solution[0] + pi_A_x, cg_solution[1]
+            elif prec_type == "svd_diagnostic":
+                Sr, Ur = prec(x)
+                approximate_GtG = Ur @ np.diag(Sr) @ Ur.T
+                pseudo_inverse = np.eye(self.n) - Ur @ np.diag(1 - Sr ** (-1)) @ Ur.T
+                logging.info(f"{np.mean((approximate_GtG - GtG)**2)=}")
+                logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
+                logging.info(f"{np.linalg.slogdet(pseudo_inverse @ GtG)=}")
+                b = -self.gradient(x)
+                return conjGrad(
+                    GtG,
+                    pseudo_inverse @ b,
+                    b,
+                    tol=1e-8,
+                    maxiter=iter_inner,
+                )
+                # return solve_cg(GtG, -self.gradient(x), maxiter=iter_inner)
+
         elif prec == "bck":
             # B = UUT
             prec_mat = (

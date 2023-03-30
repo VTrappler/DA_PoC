@@ -144,6 +144,80 @@ def deflated_conjGrad(
     return x, result_dict
 
 
+def prec_conjGrad(
+    A: np.ndarray,
+    x: np.ndarray,
+    b: np.ndarray,
+    H: np.ndarray,
+    tol: float,
+    maxiter: int,
+    verbose=False,
+):
+    """Solves Ax = b with preconditioned CG
+
+    :param A: Matrix to inverse
+    :type A: np.ndarray
+    :param x: First guess of the solution
+    :type x: np.ndarray
+    :param b: Expected solution of Ax
+    :type b: np.ndarray
+    :param H: preconditioner
+    :type H: np.ndarray
+    :param tol: tolerance
+    :type tol: float
+    :param maxiter: maximum number of iterations
+    :type maxiter: int
+    :param verbose: _description_, defaults to False
+    :type verbose: bool, optional
+    :return: _description_
+    :rtype: _type_
+    """
+
+    r = b - A.dot(x)
+    z = H @ r
+    p = z.copy()
+    residuals = [r]
+    x_list = [x]
+    norm_res = []
+    it = 0
+    cost_inner = [np.sum(r * x)]
+    try:
+        cond = np.linalg.cond(A)
+    except np.linalg.LinAlgError:
+        cond = np.inf
+    if verbose:
+        print(f"Condition number of A: {cond}")
+    while (np.sqrt(np.sum((r**2))) >= tol) and (it < maxiter):
+        Ap = A.dot(p)
+        rz = np.dot(p, z)
+        alpha = rz / np.dot(p, Ap)
+        x = x + alpha * p
+        r = r - alpha * Ap
+        z = H @ r
+        beta = np.dot(r, z) / rz
+        p = z + beta * p
+        it += 1
+        norm_res_ = np.sqrt(np.sum((r**2)))
+        norm_res.append(norm_res_)
+        cost_inner.append(np.sum(r * x))
+        x_list.append(x)
+        residuals.append(r)
+        if verbose and it % 20 == 0:
+            print(f"It: {it:>5}, ||r|| = {norm_res_}")
+    if verbose:
+        print(f"It: {it:>5}, ||r|| = {norm_res_}")
+    result_dict = {
+        "success": it != maxiter,
+        "niter": it,
+        "residuals": residuals,
+        "norm_res": norm_res,
+        "cost_inner": cost_inner,
+        "x_list": x_list,
+        "cond": cond,
+    }
+    return x, result_dict
+
+
 def jacobi_preconditioner(A):
     prec = np.zeros_like(A)
     for i in range(A.shape[0]):
@@ -158,6 +232,21 @@ def solve_cg(A, b, maxiter=None, verbose=False):
         A,
         np.zeros_like(b),
         b,
+        1e-8,
+        maxiter=maxiter,
+        verbose=verbose,
+    )
+    return x, res
+
+
+def solve_prec_cg(A, H, b, maxiter=None, verbose=False):
+    if maxiter is None:
+        maxiter = len(b)
+    x, res = prec_conjGrad(
+        A,
+        np.zeros_like(b),
+        b,
+        H,
         1e-8,
         maxiter=maxiter,
         verbose=verbose,

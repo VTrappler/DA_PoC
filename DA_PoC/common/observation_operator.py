@@ -148,10 +148,9 @@ class ObservationOperator:
     def test_obs_and_linearization(self) -> None:
         pass
 
+
 class LinearObervationOperator(ObservationOperator):
-    def __init__(
-        self, Hmatrix: np.ndarray
-    ) -> None:
+    def __init__(self, Hmatrix: np.ndarray) -> None:
         """
         :param n: input dimension
         :type n: int
@@ -176,6 +175,7 @@ class LinearObervationOperator(ObservationOperator):
 
     def linearized_operator(self, x: np.ndarray) -> sla.LinearOperator:
         return sla.aslinearoperator(self._H)
+
 
 class RandomObservationOperator(ObservationOperator):
     def __init__(
@@ -219,6 +219,7 @@ class RandomObservationOperator(ObservationOperator):
 
     def linearized_operator(self, x: np.ndarray) -> sla.LinearOperator:
         return sla.aslinearoperator(self._H)
+
 
 class IdentityObservationOperator(LinearObervationOperator):
     def __init__(self, dim: int) -> None:

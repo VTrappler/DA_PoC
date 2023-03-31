@@ -329,8 +329,8 @@ class NumericalModel:
                 approximate_GtG = Ur @ np.diag(Sr) @ Ur.T
                 pseudo_inverse = np.eye(self.n) - Ur @ np.diag(1 - Sr ** (-1)) @ Ur.T
                 logging.info(f"{np.mean((approximate_GtG - GtG)**2)=}")
-                logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
-                logging.info(f"{np.linalg.slogdet(pseudo_inverse @ GtG)=}")
+                # logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
+                # logging.info(f"{np.linalg.slogdet(pseudo_inverse @ GtG)=}")
                 b = -self.gradient(x)
                 return conjGrad(
                     GtG,

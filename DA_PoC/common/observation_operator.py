@@ -1,6 +1,6 @@
 from __future__ import nested_scopes
 import abc
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 import numpy as np
 import scipy.sparse.linalg as sla
 
@@ -149,7 +149,7 @@ class ObservationOperator:
         pass
 
 
-class LinearObervationOperator(ObservationOperator):
+class LinearObservationOperator(ObservationOperator):
     def __init__(self, Hmatrix: np.ndarray) -> None:
         """
         :param n: input dimension
@@ -221,20 +221,46 @@ class RandomObservationOperator(ObservationOperator):
         return sla.aslinearoperator(self._H)
 
 
-class IdentityObservationOperator(LinearObervationOperator):
+class IdentityObservationOperator(LinearObservationOperator):
     def __init__(self, dim: int) -> None:
         super().__init__(np.eye(dim))
 
 
-# class LinearObservationOperator(ObservationOperator):
-#     def __init__(self, n: int, m: int, H: np.ndarray) -> None:
-#         super().__init__(n, m)
-#         assert H.shape == (self.m, self.n)
-#         self.Hmat = H
-#         self.H = lambda x, i: H @ x
-#         self.H.__doc__ = """ Linear Observation operator defined as the matrix operation H(x, i) = H @ x"""
-#         self.linearH = lambda x, i: H
-#         self.linearH.__doc__ = """Linearized operator, so it returns H(x, i) = H"""
+class TimeStateIndicesObservationOperator(LinearObservationOperator):
+    def __init__(
+        self,
+        state_dimension: int,
+        window: int,
+        idx_observed_states: List[int],
+        idx_observed_timesteps: List[int],
+    ) -> None:
+        """Create observation matrix of dimension (len(obs_states) * len(obs_tsteps)) x dim * (window+1)
+
+        :param state_dimension: State vector dimension
+        :type state_dimension: int
+        :param window: length of the window (observation of length window + 1)
+        :type window: int
+        :param idx_observed_states: indices of observed states
+        :type idx_observed_states: List[int]
+        :param idx_observed_timesteps: indices of observed time steps
+        :type idx_observed_timesteps: List[int]
+        """
+        self.state_dimension = state_dimension
+        self.window = window
+        self.idx_observed_states = idx_observed_states
+        self.idx_observed_timesteps = idx_observed_timesteps
+
+        obs_state = np.zeros((len(self.idx_observed_states), self.state_dimension))
+        for i, idx in enumerate(self.idx_observed_states):
+            obs_state[i, idx] = 1.0
+
+        obs_steps = np.zeros((len(self.idx_observed_timesteps), (self.window + 1)))
+        for i, idx in enumerate(idx_observed_timesteps):
+            obs_steps[i, idx] = 1.0
+
+        obs_H = np.kron(obs_state, obs_steps)
+
+        super().__init__(Hmatrix=obs_H)
 
 
 # def main():

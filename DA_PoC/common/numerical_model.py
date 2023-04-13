@@ -5,6 +5,7 @@ import numpy as np
 from .observation_operator import ObservationOperator
 from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP, conjGrad
 from typing import Callable, Tuple, Optional, List, Union
+import consistency_tests as ct
 
 
 class NumericalModel:
@@ -173,79 +174,24 @@ class NumericalModel:
             return self.background_error_cov_inv + H_GN
 
     def test_forw_tlm_alpha(self, alpha: float) -> float:
-        """Test consistency between TLM and forward model
-        computes |G(x + alpha dx) - G(x)| / |alpha * TLM(x, dx)|
-        """
-        x = np.random.normal(size=self.n)
-        dx = np.random.normal(size=self.n)
-        fd = (self.forward(x + alpha * dx) - self.forward(x)) / alpha
-        tlm = self.tangent_linear(x).matvec(dx)
-        return np.linalg.norm(fd) / (np.linalg.norm(tlm))
+        ct.test_forw_tlm_alpha(self.forward, self.tangent_linear, self.n, alpha=alpha)
 
     def test_consistency_tlm_forward(self, plot=True) -> Tuple[np.ndarray, List]:
-        """
-        "Test Forw/TLM
-        |Forward(x + a*dx) - Forward(x)| / | (a*TLM(x, dx)) | - 1 ->  0 as a -> 0
-        """
-        print("Test Forw/TLM")
-        rat = []
-        alpha = np.logspace(0, -14, 15, base=10)
-        # print(f"     a, ratio")
-        for al in alpha:
-            ratio = np.abs(self.test_forw_tlm_alpha(al) - 1)
-            rat.append(ratio)
-            # print(f"{al:<6}, {ratio:>8}")
-        if plot:
-            import matplotlib.pyplot as plt
-
-            plt.plot(alpha, rat)
-            plt.title("Forward/TLM consistency")
-            plt.yscale("log")
-            plt.xscale("log")
-            plt.show()
-        return alpha, rat
+        ct.test_consistency_tlm_forward(
+            self.forward, self.tangent_linear, self.n, plot=plot
+        )
 
     def test_consistency_tlm_adjoint(self, n_repet: int = 1) -> List:
-        """Test TLM/ADJ
-        <Mdx, y> / <dx, M*y> = 1
-        """
-        print("Test TLM/ADJ")
-        ips = []
-        for i in range(n_repet):
-            x = np.random.normal(size=self.n)
-            dx = np.random.normal(size=self.n)
-            y = np.random.normal(size=self.m)
-            ip1 = self.tangent_linear(x).matvec(dx).T @ y
-            ip2 = dx.T @ self.adjoint(x).matvec(y)
-            print(f"<Mdx, y> / <dx, M*y> = {ip1 / ip2} should be 1.0")
-            ips.append((ip1, ip2))
-        return ips
+        ct.test_consistency_tlm_adjoint(
+            self.tangent_linear, self.adjoint, self.n, self.m, n_repet=n_repet
+        )
 
     def test_consistency_forward_adjoint(
         self, plot: bool = True
     ) -> Tuple[np.ndarray, List]:
-        print("Test Forward/Gradient Adjoint")
-        x = np.random.normal(size=self.n)
-        dx = np.random.normal(size=self.n)
-        alpha = np.logspace(0, -14, 15, base=10)  ## modified
-        diff = []
-        for al in alpha:
-            fd = np.empty(self.n)
-            for i in range(self.n):
-                dx = np.zeros(self.n)
-                dx[i] = 1
-                # print(self.cost_function(x + al * dx))
-                fd[i] = (self.cost_function(x + al * dx) - self.cost_function(x)) / al
-            diff.append(((fd - self.gradient(x)) ** 2).sum())
-        if plot:
-            import matplotlib.pyplot as plt
-
-            plt.plot(alpha, diff)
-            plt.title("Forward/Adjoint Gradient consistency")
-            plt.yscale("log")
-            plt.xscale("log")
-            plt.show()
-        return alpha, diff
+        ct.test_consistency_forward_adjoint(
+            self.cost_function, self.gradient, self.n, self.m, plot=plot
+        )
 
     def tests_consistency(self) -> None:
         """Performs the consistency test between forward, TLM and adjoint based gradient"""

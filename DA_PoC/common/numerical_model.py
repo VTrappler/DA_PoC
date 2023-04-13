@@ -5,7 +5,7 @@ import numpy as np
 from .observation_operator import ObservationOperator
 from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP, conjGrad
 from typing import Callable, Tuple, Optional, List, Union
-import consistency_tests as ct
+from . import consistency_tests as ct
 
 
 class NumericalModel:

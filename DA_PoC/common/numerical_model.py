@@ -284,7 +284,6 @@ class NumericalModel:
         prec: Optional[Union[str, Callable]] = None,
         prec_type: str = "left",
     ) -> Tuple[np.ndarray, dict]:
-
         GtG = self.gauss_newton_hessian_matrix(x, bck_prec=(prec == "bck"))
         # logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
         try:
@@ -301,6 +300,15 @@ class NumericalModel:
         elif prec == "spectralLMP":
             return solve_cg_LMP(GtG, -self.gradient(x), r=self.r, maxiter=iter_inner)
         elif callable(prec):
+            if prec_type == "general":
+                b = -self.gradient(x)
+                args = {
+                    "A": GtG,
+                    "b": b,
+                    "x": x,
+                }
+                A_to_inv, b_to_inv = prec(**args)
+                return solve_cg(A_to_inv, b_to_inv, maxiter=iter_inner)
             if prec_type == "left":
                 H = prec(x)
                 prec_GN = H @ GtG
@@ -375,7 +383,9 @@ class NumericalModel:
             "condprec",
         ]
         print(
-            f"{colnames[0].rjust(8)}, {colnames[1].rjust(5)}, {colnames[2].rjust(5)}, {colnames[3].rjust(8)}, {colnames[4].rjust(8)}, {colnames[5].rjust(6)}, {colnames[6].rjust(8)}, {colnames[7].rjust(8)}"
+            f"{colnames[0].rjust(8)}, {colnames[1].rjust(5)}, {colnames[2].rjust(5)}, "  # exp, ncycle, nouter
+            f"{colnames[3].rjust(8)}, {colnames[4].rjust(8)}, {colnames[5].rjust(6)}, "  # f(x), CGiter, logdet
+            f"{colnames[6].rjust(8)}, {colnames[7].rjust(8)}"  # cond, cond after preconditioning
         )
         if log_file is not None:
             with open(log_file, "a+") as fhandle:
@@ -455,33 +465,6 @@ class NumericalModel:
             "quad_error": quad_error,
             "inner_residual": inner_res,
         }
-        # return (
-        #     x_curr,
-        #     self.cost_function(x_curr),
-        #     n_iter,
-        #     fun,
-        #     cost_inner,
-        #     quad_error,
-        #     inner_res,
-        # )
-
-
-def generate_marginal_obs_operator(
-    H: np.ndarray, marginal, _func: Callable, linearized_marginal_func: Callable
-) -> ObservationOperator:
-    # H = np.random.binomial(1, p, np.prod(shape)).reshape(shape)
-    obs_op = ObservationOperator(H.shape[0], H.shape[1])
-    # obs_op.set_operator(lambda x: H @ marginal_func(x))
-    obs_op.set_linearized(lambda x: H @ linearized_marginal_func(x))
-    return obs_op
-
-
-def f(x):
-    return 1 / (x**2 + 1)
-
-
-def fprime(x):
-    return np.diag(-(2 * x) / (x**2 + 1) ** 2)
 
 
 if __name__ == "__main__":
@@ -489,6 +472,22 @@ if __name__ == "__main__":
     p = 0.5
     H = np.random.binomial(1, p, np.prod(shape)).reshape(shape)
     print(H)
+
+    def generate_marginal_obs_operator(
+        H: np.ndarray, marginal, _func: Callable, linearized_marginal_func: Callable
+    ) -> ObservationOperator:
+        # H = np.random.binomial(1, p, np.prod(shape)).reshape(shape)
+        obs_op = ObservationOperator(H.shape[0], H.shape[1])
+        # obs_op.set_operator(lambda x: H @ marginal_func(x))
+        obs_op.set_linearized(lambda x: H @ linearized_marginal_func(x))
+        return obs_op
+
+    def f(x):
+        return 1 / (x**2 + 1)
+
+    def fprime(x):
+        return np.diag(-(2 * x) / (x**2 + 1) ** 2)
+
     operator = generate_marginal_obs_operator(H, f, fprime)
     operator.linearized_operator(1 + np.arange(3)).matmat(np.eye(3))
 

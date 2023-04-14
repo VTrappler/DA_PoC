@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # import torch
 class OrthogonalProjector:
     def __init__(self, A: np.ndarray, W: np.ndarray):
@@ -342,6 +343,21 @@ def solve_cg_LMP(A, b, r, maxiter=None, verbose=False):
 #         "residual": r,
 #     }
 #     return x, result_dict
+
+
+class Preconditioner:
+    def __init__(self, maxiter=100) -> None:
+        self.solver = lambda A, b: solve_cg(A, b, maxiter)
+
+    def set_preconditioner(self, func) -> None:
+        self.construct_preconditioner = func
+
+    def __call__(self, A, b, x):
+        return self.construct_preconditioner(A, b, x)
+
+    def solve_preconditioned_system(self, A, b, x):
+        A_to_inv, b_to_inv = self.__call__(A, b, x)
+        return self.solver(A_to_inv, b_to_inv)
 
 
 if __name__ == "__main__":

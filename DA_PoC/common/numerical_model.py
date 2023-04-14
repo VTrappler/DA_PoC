@@ -231,6 +231,7 @@ class NumericalModel:
         prec_type: str = "left",
     ) -> Tuple[np.ndarray, dict]:
         GtG = self.gauss_newton_hessian_matrix(x, bck_prec=(prec == "bck"))
+        b = -self.gradient(x)
         # logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
         try:
             GtG = GtG.matmat(np.eye(self.n))
@@ -240,14 +241,13 @@ class NumericalModel:
         # if cond > 1e3:   # TODO: SAME
         #     prec = None # TODO: SAME
         if prec is None:
-            return solve_cg(GtG, -self.gradient(x), maxiter=iter_inner)
+            return solve_cg(GtG, b, maxiter=iter_inner)
         elif prec == "jacobi":
-            return solve_cg_jacobi(GtG, -self.gradient(x), maxiter=iter_inner)
+            return solve_cg_jacobi(GtG, b, maxiter=iter_inner)
         elif prec == "spectralLMP":
-            return solve_cg_LMP(GtG, -self.gradient(x), r=self.r, maxiter=iter_inner)
+            return solve_cg_LMP(GtG, b, r=self.r, maxiter=iter_inner)
         elif callable(prec):
             if prec_type == "general":
-                b = -self.gradient(x)
                 args = {
                     "A": GtG,
                     "b": b,
@@ -259,15 +259,14 @@ class NumericalModel:
                 H = prec(x)
                 prec_GN = H @ GtG
                 # logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
-                return solve_cg(prec_GN, -H @ self.gradient(x), maxiter=iter_inner)
+                return solve_cg(prec_GN, H @ b, maxiter=iter_inner)
             elif prec_type == "right":
                 H_R = prec(x)
                 prec_GN = GtG @ H_R
                 # logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
-                cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
+                cg_solution = solve_cg(GtG @ H_R, b, maxiter=iter_inner)
                 return H_R @ cg_solution[0], cg_solution[1]
             elif prec_type == "deflation":
-                b = -self.gradient(x)
                 Sr, Ur = prec(x)
                 # logging.info(f"{Sr=}")
                 pi_A = Ur @ Ur.T
@@ -283,9 +282,11 @@ class NumericalModel:
                 approximate_GtG = Ur @ np.diag(Sr) @ Ur.T
                 pseudo_inverse = np.eye(self.n) - Ur @ np.diag(1 - Sr ** (-1)) @ Ur.T
                 logging.info(f"{np.mean((approximate_GtG - GtG)**2)=}")
-                # logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
+                try:
+                    logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
+                except:
+                    pass
                 # logging.info(f"{np.linalg.slogdet(pseudo_inverse @ GtG)=}")
-                b = -self.gradient(x)
                 return conjGrad(
                     GtG,
                     pseudo_inverse @ b,
@@ -293,7 +294,6 @@ class NumericalModel:
                     tol=1e-8,
                     maxiter=iter_inner,
                 )
-                # return solve_cg(GtG, -self.gradient(x), maxiter=iter_inner)
             elif prec_type == "deflation_general":
                 args = {
                     "A": GtG,
@@ -310,9 +310,7 @@ class NumericalModel:
                 np.eye(self.n)
                 + self.background_error_sqrt.T @ GtG @ self.background_error_sqrt
             )
-            cg_solution = solve_cg(
-                prec_mat, -self.background_error_sqrt.T @ self.gradient(x)
-            )
+            cg_solution = solve_cg(prec_mat, self.background_error_sqrt.T @ b)
             return self.background_error_sqrt @ cg_solution[0], cg_solution[1]
 
     def GNmethod(

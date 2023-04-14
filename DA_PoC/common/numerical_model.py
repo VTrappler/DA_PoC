@@ -294,6 +294,15 @@ class NumericalModel:
                     maxiter=iter_inner,
                 )
                 # return solve_cg(GtG, -self.gradient(x), maxiter=iter_inner)
+            elif prec_type == "deflation_general":
+                args = {
+                    "A": GtG,
+                    "b": b,
+                    "x": x,
+                }
+                A_to_inv, b_to_inv, additional_term = prec(**args)
+                cg_solution = solve_cg(A_to_inv, b_to_inv, maxiter=iter_inner)
+                return cg_solution[0] + additional_term, cg_solution[1]
 
         elif prec == "bck":
             # B = UUT

@@ -3,7 +3,13 @@ import scipy.sparse.linalg as sla
 import numpy as np
 
 from .observation_operator import ObservationOperator
-from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP, conjGrad
+from .linearsolver import (
+    solve_cg,
+    solve_cg_jacobi,
+    solve_cg_LMP,
+    conjGrad,
+    Preconditioner,
+)
 from typing import Callable, Tuple, Optional, List, Union
 from . import consistency_tests as ct
 
@@ -234,20 +240,23 @@ class NumericalModel:
         # logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
         try:
             GtG = GtG.matmat(np.eye(self.n))
+            b = -self.gradient(x)
+
         except AttributeError:
             pass
         # slogdet, cond = np.linalg.slogdet(GtG), np.linalg.cond(GtG) ## TODO: caution to rm
         # if cond > 1e3:   # TODO: SAME
         #     prec = None # TODO: SAME
         if prec is None:
-            return solve_cg(GtG, -self.gradient(x), maxiter=iter_inner)
+            return solve_cg(GtG, b, maxiter=iter_inner)
+        elif isinstance(prec, Preconditioner):
+            return prec.solve_preconditioned_system(GtG, b, x)
         elif prec == "jacobi":
-            return solve_cg_jacobi(GtG, -self.gradient(x), maxiter=iter_inner)
+            return solve_cg_jacobi(GtG, b, maxiter=iter_inner)
         elif prec == "spectralLMP":
-            return solve_cg_LMP(GtG, -self.gradient(x), r=self.r, maxiter=iter_inner)
+            return solve_cg_LMP(GtG, b, r=self.r, maxiter=iter_inner)
         elif callable(prec):
             if prec_type == "general":
-                b = -self.gradient(x)
                 args = {
                     "A": GtG,
                     "b": b,
@@ -259,25 +268,33 @@ class NumericalModel:
                 H = prec(x)
                 prec_GN = H @ GtG
                 # logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
-                return solve_cg(prec_GN, -H @ self.gradient(x), maxiter=iter_inner)
+                return solve_cg(prec_GN, H @ b, maxiter=iter_inner)
             elif prec_type == "right":
                 H_R = prec(x)
                 prec_GN = GtG @ H_R
                 # logging.info(f"svd(prec): {np.linalg.svd(prec_GN)[1]})")
-                cg_solution = solve_cg(GtG @ H_R, -self.gradient(x), maxiter=iter_inner)
+                cg_solution = solve_cg(GtG @ H_R, b, maxiter=iter_inner)
                 return H_R @ cg_solution[0], cg_solution[1]
             elif prec_type == "deflation":
-                b = -self.gradient(x)
                 Sr, Ur = prec(x)
                 # logging.info(f"{Sr=}")
                 pi_A = Ur @ Ur.T
                 pi_U = Ur @ np.diag(Sr ** (-1)) @ Ur.T
                 pi_A_orth = np.eye(self.n) - pi_A
                 pi_A_x = pi_U @ b
-
                 A_matrix = GtG @ pi_A_orth
                 cg_solution = solve_cg(A_matrix, pi_A_orth.T @ b, maxiter=iter_inner)
                 return cg_solution[0] + pi_A_x, cg_solution[1]
+            elif prec_type == "deflation_general":
+                args = {
+                    "A": GtG,
+                    "b": b,
+                    "x": x,
+                }
+                A_to_inv, b_to_inv, additional_term = prec(**args)
+                cg_solution = solve_cg(A_to_inv, b_to_inv, maxiter=iter_inner)
+                return cg_solution[0] + additional_term, cg_solution[1]
+
             elif prec_type == "svd_diagnostic":
                 Sr, Ur = prec(x)
                 approximate_GtG = Ur @ np.diag(Sr) @ Ur.T
@@ -285,7 +302,6 @@ class NumericalModel:
                 logging.info(f"{np.mean((approximate_GtG - GtG)**2)=}")
                 # logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
                 # logging.info(f"{np.linalg.slogdet(pseudo_inverse @ GtG)=}")
-                b = -self.gradient(x)
                 return conjGrad(
                     GtG,
                     pseudo_inverse @ b,
@@ -293,6 +309,14 @@ class NumericalModel:
                     tol=1e-8,
                     maxiter=iter_inner,
                 )
+
+            elif prec_type == "full_solver":
+                args = {
+                    "A": GtG,
+                    "b": b,
+                    "x": x,
+                }
+                return prec(**args)
                 # return solve_cg(GtG, -self.gradient(x), maxiter=iter_inner)
 
         elif prec == "bck":
@@ -301,9 +325,7 @@ class NumericalModel:
                 np.eye(self.n)
                 + self.background_error_sqrt.T @ GtG @ self.background_error_sqrt
             )
-            cg_solution = solve_cg(
-                prec_mat, -self.background_error_sqrt.T @ self.gradient(x)
-            )
+            cg_solution = solve_cg(prec_mat, self.background_error_sqrt.T @ b)
             return self.background_error_sqrt @ cg_solution[0], cg_solution[1]
 
     def GNmethod(

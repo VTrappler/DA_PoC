@@ -174,22 +174,24 @@ class NumericalModel:
             return self.background_error_cov_inv + H_GN
 
     def test_forw_tlm_alpha(self, alpha: float) -> float:
-        ct.test_forw_tlm_alpha(self.forward, self.tangent_linear, self.n, alpha=alpha)
+        return ct.test_forw_tlm_alpha(
+            self.forward, self.tangent_linear, self.n, alpha=alpha
+        )
 
     def test_consistency_tlm_forward(self, plot=True) -> Tuple[np.ndarray, List]:
-        ct.test_consistency_tlm_forward(
+        return ct.test_consistency_tlm_forward(
             self.forward, self.tangent_linear, self.n, plot=plot
         )
 
     def test_consistency_tlm_adjoint(self, n_repet: int = 1) -> List:
-        ct.test_consistency_tlm_adjoint(
+        return ct.test_consistency_tlm_adjoint(
             self.tangent_linear, self.adjoint, self.n, self.m, n_repet=n_repet
         )
 
     def test_consistency_forward_adjoint(
         self, plot: bool = True
     ) -> Tuple[np.ndarray, List]:
-        ct.test_consistency_forward_adjoint(
+        return ct.test_consistency_forward_adjoint(
             self.cost_function, self.gradient, self.n, self.m, plot=plot
         )
 

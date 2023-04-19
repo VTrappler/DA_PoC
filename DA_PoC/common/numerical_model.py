@@ -178,7 +178,9 @@ class NumericalModel:
             self.forward, self.tangent_linear, self.n, alpha=alpha
         )
 
-    def test_consistency_tlm_forward(self, plot=True) -> Tuple[np.ndarray, List]:
+    def test_consistency_tlm_forward(
+        self, plot: bool = True
+    ) -> Tuple[np.ndarray, List]:
         return ct.test_consistency_tlm_forward(
             self.forward, self.tangent_linear, self.n, plot=plot
         )
@@ -192,7 +194,7 @@ class NumericalModel:
         self, plot: bool = True
     ) -> Tuple[np.ndarray, List]:
         return ct.test_consistency_forward_adjoint(
-            self.cost_function, self.gradient, self.n, self.m, plot=plot
+            self.cost_function, self.gradient, self.n, plot=plot
         )
 
     def tests_consistency(self) -> None:

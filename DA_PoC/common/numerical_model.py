@@ -197,8 +197,9 @@ class NumericalModel:
             self.cost_function, self.gradient, self.n, plot=plot
         )
 
-    def tests_consistency(self) -> None:
+    def tests_consistency(self, figname=None) -> None:
         """Performs the consistency test between forward, TLM and adjoint based gradient"""
+        print("test_consistency_tlm_forward")
         alpha, rat = self.test_consistency_tlm_forward(plot=False)
         import matplotlib.pyplot as plt
         import scipy
@@ -210,12 +211,18 @@ class NumericalModel:
         plt.xscale("log")
         plt.subplot(1, 2, 2)
         alpha, diff = self.test_consistency_forward_adjoint(plot=False)
+        print("test_consistency_forward_adjoint")
         plt.plot(alpha, diff)
         plt.title("Forward/Adjoint Gradient consistency\nV shape expected")
         plt.yscale("log")
         plt.xscale("log")
-        plt.show()
-        n_repet = 5
+        if figname is None:
+            plt.show()
+        else:
+            plt.savefig(figname)
+            plt.close()
+        n_repet = 3
+        print(f"test_consistency_tlm_adjoint, {n_repet=}")
         ips = self.test_consistency_tlm_adjoint(n_repet)
         ratios_ips = np.fromiter(map(lambda x: x[0] / x[1], ips), dtype=float)
         print(

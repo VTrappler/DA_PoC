@@ -1,3 +1,4 @@
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from .VariationalMethod import VariationalMethod
@@ -23,7 +24,8 @@ class Incremental4DVarCG(VariationalMethod):
         bounds: np.ndarray,
         numerical_model,
         observation_operator,
-        x0_t: np.ndarray,
+        x0_run: np.ndarray,
+        x0_analysis: np.ndarray,
         get_next_observations,
         n_cycle: int,
         n_outer: int,
@@ -35,7 +37,8 @@ class Incremental4DVarCG(VariationalMethod):
         super().__init__(state_dimension, bounds)
         self.numerical_model = numerical_model
         self.observation_operator = observation_operator
-        self.x0_t = x0_t
+        self.x0_run = x0_run
+        self.x0_analysis = x0_analysis
         self.get_next_observations = get_next_observations
         self.n_cycle = n_cycle
         self.n_outer = n_outer
@@ -51,7 +54,7 @@ class Incremental4DVarCG(VariationalMethod):
             print("Attribute n_cycle modified")
             self.n_cycle = n_cycle
         nobs = self.numerical_model.nobs
-        x_t = self.x0_t
+        x_t = self.x0_run
         t = np.arange(nobs)
         # Initialize arrays
         truth_full = np.empty((self.state_dimension, nobs * self.n_cycle))
@@ -61,7 +64,10 @@ class Incremental4DVarCG(VariationalMethod):
         n_iter_innerloop = []
         cost_outerloop = []
         sp_optimisation = []
-        x0_optim = x_t + np.random.normal(size=self.state_dimension)
+        if self.x0_analysis is None:
+            x0_optim = x_t + np.random.normal(size=self.state_dimension)
+        else:
+            x0_optim = self.x0_analysis
         quad_errors = []
         innerloop_residual_cycle = []
 
@@ -162,7 +168,7 @@ class Incremental4DVarCG(VariationalMethod):
         plt.suptitle(f"{title}")
         plt.show()
 
-    def plot_innerloopiter(self, color: str = "blue", label: str = ""):
+    def plot_innerloopiter(self, color: str = "blue", label: str = "") -> None:
         ninnerloop = self.run_summary["n_iter_innerloop"]
         n_outer = len(ninnerloop[0])
         m_, s_, max_, min_ = (
@@ -177,7 +183,21 @@ class Incremental4DVarCG(VariationalMethod):
 
     def plot_residuals_inner_loop(
         self, color: str = "blue", label: str = "", nostats=False, cumulative=False
-    ):
+    ) -> np.ndarray:
+        """Plot the norm of the residuals along the inner loop iterations
+
+        :param color: color in which to plot the norm, defaults to "blue"
+        :type color: str, optional
+        :param label: label, defaults to ""
+        :type label: str, optional
+        :param nostats: Should some statistical study be performed, defaults to False
+        :type nostats: bool, optional
+        :param cumulative: plot the cumulative fraction of finished iterations, defaults to False
+        :type cumulative: bool, optional
+        :raises RuntimeError: no stored data (run not performed)
+        :return: array of residuals
+        :rtype: np.ndarray
+        """
         if self.run_summary is None:
             raise RuntimeError("No stored data")
         residuals = []
@@ -224,7 +244,7 @@ class Incremental4DVarCG(VariationalMethod):
                 ax2.set_ylim([0, 1])
         return residuals
 
-    def extract_condition_niter(self) -> tuple:
+    def extract_condition_niter(self) -> Tuple:
         cond = []
         ite = []
         for ncy in range(self.n_cycle):
@@ -237,7 +257,7 @@ class Incremental4DVarCG(VariationalMethod):
 ## Backward compatibility ?
 
 
-def data_assimilation(
+def __data_assimilation(
     l_model,
     obs_operator,
     x0_t,
@@ -328,7 +348,7 @@ def data_assimilation(
     }
 
 
-def diagnostic_plots(DA, title):
+def __diagnostic_plots(DA, title):
     truth_full, obs_full, analysis_full = (
         DA["truth_full"],
         DA["obs_full"],
@@ -358,7 +378,7 @@ def diagnostic_plots(DA, title):
     plt.show()
 
 
-def plot_innerloopiter(DA_dict, color, label):
+def __plot_innerloopiter(DA_dict, color, label):
     ninnerloop = DA_dict["n_iter_innerloop"]
     n_outer = len(ninnerloop[0])
     m_, s_, max_, min_ = (

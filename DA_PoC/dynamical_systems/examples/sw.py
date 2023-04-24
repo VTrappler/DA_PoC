@@ -170,7 +170,9 @@ class SWModel:
     # animation = VideoClip(make_frame, duration=duration)
     # animation.ipython_display(fps=20, loop=True, autoplay=True)
 
-    def run(self, u0, v0, h0, n_steps, path, log_every=25, array_store=False):
+    def run(
+        self, u0, v0, h0, n_steps, path, log_every=25, array_store=False, pbar=True
+    ):
         self.set_initial_state(u0, v0, h0)
         if log_every is not None:
             self.init_ncfile(path)
@@ -180,7 +182,12 @@ class SWModel:
                     (int(n_steps // log_every) + 1, 3 * self.state_variable_length)
                 )
         ite = 0
-        for u, v, h in tqdm.tqdm(self.iterate_steps(), total=n_steps):
+        if pbar:
+            iterable = tqdm.tqdm(self.iterate_steps(), total=n_steps)
+        else:
+            iterable = self.iterate_steps()
+
+        for u, v, h in iterable:
             if log_every is not None:
                 if ite % log_every == 0:
                     self.write_ncfile(path, i_written, ite)
@@ -747,10 +754,10 @@ class SWModelJax(SWModel):
             self.apply_lateral_friction()
         return self.u, self.v, self.h
 
-    def forward(self, state, n_steps, aux=False):
+    def forward(self, state, n_steps, aux=False, pbar=True):
         u, v, h = self.separate_state_vector(state)
         new_state = self.concatenate_state_var(
-            *self.run(u, v, h, n_steps, log_every=None, path=None)
+            *self.run(u, v, h, n_steps, log_every=None, path=None, pbar=pbar)
         )
         if aux:
             return new_state, new_state

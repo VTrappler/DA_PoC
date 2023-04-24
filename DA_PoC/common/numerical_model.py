@@ -4,8 +4,10 @@ import numpy as np
 
 from .observation_operator import ObservationOperator
 from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP, conjGrad
-from typing import Callable, Tuple, Optional, List, Union
+from typing import Callable, Dict, Tuple, Optional, List, Union
 from . import consistency_tests as ct
+
+Preconditioner = Dict | str
 
 
 class NumericalModel:
@@ -165,9 +167,13 @@ class NumericalModel:
         return self.adjoint(x) @ self.data_misfit(x) + prior_jac
 
     def gauss_newton_hessian_matrix(
-        self, x: np.ndarray, bck_prec: bool = False
+        self, x: np.ndarray, bck_prec: bool = False, lazy: bool = True
     ) -> Union[np.ndarray, sla.LinearOperator]:
-        H_GN = self.adjoint(x) @ (self.jac_mat(x))
+        if lazy:
+            jac = self.jac_mat(x)
+            H_GN = jac.T @ jac
+        else:
+            H_GN = self.adjoint(x) @ (self.jac_mat(x))
         if (self.background_error_cov_inv is None) or (bck_prec):
             return H_GN
         else:
@@ -241,6 +247,19 @@ class NumericalModel:
         prec: Optional[Union[str, Callable]] = None,
         prec_type: str = "left",
     ) -> Tuple[np.ndarray, dict]:
+        """Solve the innerloop using the GN method
+
+        :param x: Linearization point
+        :type x: np.ndarray
+        :param iter_inner: Number of inner loop iterations, defaults to 10
+        :type iter_inner: int, optional
+        :param prec: Preconditioner to use, defaults to None
+        :type prec: Optional[Union[str, Callable]], optional
+        :param prec_type: Type of preconditioner, defaults to "left"
+        :type prec_type: str, optional
+        :return: Found solution of the linear problem and dictionary of diagnostics
+        :rtype: Tuple[np.ndarray, dict]
+        """
         GtG = self.gauss_newton_hessian_matrix(x, bck_prec=(prec == "bck"))
         b = -self.gradient(x)
         # logging.info(f"svd(GtG): {np.linalg.svd(GtG)[1]}")
@@ -330,11 +349,33 @@ class NumericalModel:
         n_outer: int = 3,
         n_inner: int = 10,
         verbose: bool = False,
-        prec=None,
-        log_file=None,
-        exp_name=None,
-        i_cycle=None,
-    ) -> Tuple:
+        prec: Preconditioner = None,
+        log_file: str = None,
+        exp_name: str = "default",
+        i_cycle: int = 0,
+    ) -> Dict:
+        """Apply the GN method iteratively
+
+        :param x0: starting point of linearization
+        :type x0: np.ndarray
+        :param n_outer: Number of outer loops, defaults to 3
+        :type n_outer: int, optional
+        :param n_inner: number of inner loops, defaults to 10
+        :type n_inner: int, optional
+        :param verbose: defaults to False
+        :type verbose: bool, optional
+        :param prec: Preconditioner to use, defaults to None
+        :type prec: Preconditioner, optional
+        :param log_file: Log file in which the diagnostics are written, defaults to None
+        :type log_file: str, optional
+        :param exp_name: Name of experiments, defaults to "default"
+        :type exp_name: str, optional
+        :param i_cycle: Cycle number in Sequential Data Assimilation procedure, defaults to 0
+        :type i_cycle: int, optional
+        :return: Dictionary of results
+        :rtype: Dict
+        """
+
         x_curr = x0
         colnames = [
             "#exp",

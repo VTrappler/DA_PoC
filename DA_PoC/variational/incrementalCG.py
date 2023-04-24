@@ -1,7 +1,11 @@
 from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+
+from ..common.numerical_model import NumericalModel
+from ..common.observation_operator import ObservationOperator
 from .VariationalMethod import VariationalMethod
+from typing import Callable
 
 
 def pad_ragged(list_of_arr):
@@ -22,11 +26,11 @@ class Incremental4DVarCG(VariationalMethod):
         self,
         state_dimension: int,
         bounds: np.ndarray,
-        numerical_model,
-        observation_operator,
+        numerical_model: NumericalModel,
+        observation_operator: ObservationOperator,
         x0_run: np.ndarray,
         x0_analysis: np.ndarray,
-        get_next_observations,
+        get_next_observations: Callable,
         n_cycle: int,
         n_outer: int,
         n_inner: int,
@@ -34,6 +38,35 @@ class Incremental4DVarCG(VariationalMethod):
         plot: bool,
         log_append: bool,
     ) -> None:
+        """Instantiate an Incremental4DVar method
+
+        :param state_dimension: state dimension (n)
+        :type state_dimension: int
+        :param bounds: bounds of the state vector
+        :type bounds: np.ndarray
+        :param numerical_model: Numerical Model implementing all useful methods
+        :type numerical_model: NumericalModel
+        :param observation_operator: Observation operator instance
+        :type observation_operator: ObservationOperator
+        :param x0_run: Initial state for the DA cycles (which generates the truth/observations )
+        :type x0_run: np.ndarray
+        :param x0_analysis: Initial state for the optimization procedure
+        :type x0_analysis: np.ndarray
+        :param get_next_observations: Function which generates the next observations
+        :type get_next_observations: Callable
+        :param n_cycle: Number of DA cycle to perform
+        :type n_cycle: int
+        :param n_outer: Number of Linearization to perform
+        :type n_outer: int
+        :param n_inner: Number of iterations of CG to make
+        :type n_inner: int
+        :param prec: Preconditioner
+        :type prec: dict
+        :param plot: Plot some diagnostics
+        :type plot: bool
+        :param log_append: Append log to file
+        :type log_append: bool
+        """
         super().__init__(state_dimension, bounds)
         self.numerical_model = numerical_model
         self.observation_operator = observation_operator
@@ -59,7 +92,7 @@ class Incremental4DVarCG(VariationalMethod):
         # Initialize arrays
         truth_full = np.empty((self.state_dimension, nobs * self.n_cycle))
         analysis_full = np.empty((self.state_dimension, nobs * self.n_cycle))
-        obs_full = np.empty((self.observation_operator.m, nobs * self.n_cycle))
+        obs_full = np.empty((self.state_dimension, nobs * self.n_cycle))
 
         n_iter_innerloop = []
         cost_outerloop = []
@@ -111,7 +144,7 @@ class Incremental4DVarCG(VariationalMethod):
 
             analysis_full[:, t_cycle] = analysis
             truth_full[:, t_cycle] = truth
-            # obs_full[:, t_cycle] = obs[:, 1:]
+            obs_full[:, t_cycle] = obs[:, 1:]
             if self.plot:
                 for i in range(self.state_dimension):
                     plt.subplot(self.state_dimension, 1, i + 1)

@@ -298,6 +298,7 @@ class NumericalModel:
                 return H_R @ cg_solution[0], cg_solution[1]
             elif prec_type == "deflation":
                 Sr, Ur = prec(x)
+                logging.info(f"{Sr.min()}, {Sr.max()}")
                 # logging.info(f"{Sr=}")
                 pi_A = Ur @ Ur.T
                 pi_U = Ur @ np.diag(Sr ** (-1)) @ Ur.T
@@ -312,6 +313,7 @@ class NumericalModel:
                 approximate_GtG = Ur @ np.diag(Sr) @ Ur.T
                 pseudo_inverse = np.eye(self.n) - Ur @ np.diag(1 - Sr ** (-1)) @ Ur.T
                 logging.info(f"{np.mean((approximate_GtG - GtG)**2)=}")
+                logging.info(f"{Sr.min()}, {Sr.max()}")
                 try:
                     logging.info(f"{np.linalg.cond(pseudo_inverse @ GtG)=}")
                 except:

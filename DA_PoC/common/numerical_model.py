@@ -378,7 +378,7 @@ class NumericalModel:
         :rtype: Dict
         """
 
-        x_curr = x0
+        x_curr = x0.copy()
         colnames = [
             "#exp",
             "ncycle",

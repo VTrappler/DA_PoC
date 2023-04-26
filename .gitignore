@@ -6,3 +6,5 @@
 *.swp
 *.egg-info
 *.vscode
+*.mp4
+log_sw.txt

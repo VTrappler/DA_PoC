@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # import torch
 class OrthogonalProjector:
     def __init__(self, A: np.ndarray, W: np.ndarray):
@@ -310,8 +311,9 @@ def construct_LMP(n, S, AS, shift=1):
 
 
 def solve_cg_LMP(A, b, r, maxiter=None, verbose=False):
-    _, v = np.linalg.eig(A)
-    S = v[:, :r]
+    _, v = np.linalg.eigh(A)
+    v_rev = v[:, ::-1]
+    S = v_rev[:, :r]
     AS = A @ S
     prec = construct_LMP(len(b), S, AS)
     return solve_cg(prec @ A, prec @ b, maxiter=maxiter, verbose=verbose)

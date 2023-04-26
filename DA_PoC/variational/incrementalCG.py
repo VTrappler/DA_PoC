@@ -34,9 +34,10 @@ class Incremental4DVarCG(VariationalMethod):
         n_cycle: int,
         n_outer: int,
         n_inner: int,
-        prec: dict,
-        plot: bool,
-        log_append: bool,
+        prec: dict = None,
+        plot: bool = False,
+        log_append: bool = False,
+        save_all: bool = False,
     ) -> None:
         """Instantiate an Incremental4DVar method
 
@@ -80,7 +81,8 @@ class Incremental4DVarCG(VariationalMethod):
         self.plot = plot
         self.run_summary = None
         self.GNlog_file = None
-        self.exp_name = None
+        self.exp_name = "default"
+        self.save_all = save_all
 
     def run(self, n_cycle: int = None, verbose=False) -> dict:
         if n_cycle is not None:
@@ -90,9 +92,14 @@ class Incremental4DVarCG(VariationalMethod):
         x_t = self.x0_run
         t = np.arange(nobs)
         # Initialize arrays
-        truth_full = np.empty((self.state_dimension, nobs * self.n_cycle))
-        analysis_full = np.empty((self.state_dimension, nobs * self.n_cycle))
-        obs_full = np.empty((self.state_dimension, nobs * self.n_cycle))
+        if self.save_all:
+            truth_full = np.empty((self.state_dimension, nobs * self.n_cycle))
+            analysis_full = np.empty((self.state_dimension, nobs * self.n_cycle))
+            obs_full = np.empty((self.state_dimension, nobs * self.n_cycle))
+        else:
+            truth_full = None
+            analysis_full = None
+            obs_full = None
 
         n_iter_innerloop = []
         cost_outerloop = []
@@ -128,23 +135,29 @@ class Incremental4DVarCG(VariationalMethod):
             cost_outerloop.append(gauss_newton_dict["cost_outer"])
             # sp_optim = scipy.optimize.minimize(self.numerical_model.cost_function, x0=x0_optim)
             # sp_optimisation.append(sp_optim.fun)
-            analysis = self.numerical_model.forward_no_obs(gn_x).reshape(
-                self.state_dimension, -1
-            )[:, 1:]
+            if self.save_all:
+                analysis = self.numerical_model.forward_no_obs(gn_x).reshape(
+                    self.state_dimension, -1
+                )[:, 1:]
+                x0_optim = analysis[:, -1]
+            else:
+                analysis = self.numerical_model.forward_no_obs(gn_x)
+                x0_optim = analysis
             if verbose:
                 print(f"{self.numerical_model.forward_no_obs(gn_x).shape=}")
                 print(f"{analysis.shape=}")
-            x0_optim = analysis[:, -1]
             t_cycle = t + i_cycle * nobs
             if verbose:
                 print(f"{analysis.shape=}")
-                print(f"{analysis_full.shape=}")
                 print(f"{truth.shape=}")
-                print(f"{truth_full.shape=}")
+                if self.save_all:
+                    print(f"{analysis_full.shape=}")
+                    print(f"{truth_full.shape=}")
 
-            analysis_full[:, t_cycle] = analysis
-            truth_full[:, t_cycle] = truth
-            obs_full[:, t_cycle] = obs[:, 1:]
+            if self.save_all:
+                analysis_full[:, t_cycle] = analysis
+                truth_full[:, t_cycle] = truth
+                obs_full[:, t_cycle] = obs[:, 1:]
             if self.plot:
                 for i in range(self.state_dimension):
                     plt.subplot(self.state_dimension, 1, i + 1)

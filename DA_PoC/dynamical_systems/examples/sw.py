@@ -752,6 +752,8 @@ class SWModelJax(SWModel):
         # )
         if self.lateral_viscosity > 0:
             self.apply_lateral_friction()
+
+        # self.apply_forcing()
         return self.u, self.v, self.h
 
     def forward(self, state, n_steps, aux=False, pbar=True):

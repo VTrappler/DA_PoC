@@ -452,11 +452,15 @@ class NumericalModel:
                     f"{cfun:>8.4f}, {prev_n_inner_loop:>8d}, "
                     f"{slogdet[1]:>6.2f}, {cond:>6.3e}, {res['cond']:>6.3e}"
                 )
-                to_write = f"{exp_name}, {i_cycle}, {i_outer}, {cfun}, {prev_n_inner_loop}, {slogdet[1]}, {cond}, {res['cond']}"
-
-                with open(log_file, "a+") as fhandle:
-                    fhandle.write(to_write)
-                    fhandle.write("\n")
+                to_write = (
+                    f"{exp_name}, {i_cycle}, {i_outer}, "
+                    f"{cfun}, {prev_n_inner_loop}, "
+                    f"{slogdet[1]}, {cond}, {res['cond']}"
+                )
+                if log_file is not None:
+                    with open(log_file, "a+") as fhandle:
+                        fhandle.write(to_write)
+                        fhandle.write("\n")
             n_iter[i_outer] = prev_n_inner_loop
             if np.isnan(cfun).any():
                 print("--reset")

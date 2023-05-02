@@ -84,7 +84,20 @@ class Incremental4DVarCG(VariationalMethod):
         self.exp_name = "default"
         self.save_all = save_all
 
-    def run(self, n_cycle: int = None, verbose=False) -> dict:
+    def run(self, exp_name: str = None, n_cycle: int = None, verbose=False) -> dict:
+        """Run the Data Assimilation system
+
+        :param exp_name: set exp name for log, defaults to None
+        :type exp_name: str, optional
+        :param n_cycle: Change number of cycle, defaults to None
+        :type n_cycle: int, optional
+        :param verbose: Should it be verbose, defaults to False
+        :type verbose: bool, optional
+        :return: DA diagnostics dictionary
+        :rtype: dict
+        """
+        if exp_name is not None:
+            self.exp_name = exp_name
         if n_cycle is not None:
             print("Attribute n_cycle modified")
             self.n_cycle = n_cycle

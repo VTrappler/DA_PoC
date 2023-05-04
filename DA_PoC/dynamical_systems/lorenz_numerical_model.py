@@ -245,9 +245,10 @@ class LorenzWrapper:
 # nobs = 10
 
 
-def burn_model(n, burn=500):
-    x = np.random.normal(size=n) * 5
+def burn_model(lorenz: LorenzWrapper, burn=500):
+    n = lorenz.state_dimension
     lorenz = LorenzWrapper(n)
+    x = np.random.normal(size=n) * 5
     lorenz.n_total_obs = burn
     lorenz.H = lambda x: x
     burn_in = lorenz.forward_model(x).reshape(n, -1)

@@ -3,7 +3,13 @@ import scipy.sparse.linalg as sla
 import numpy as np
 
 from .observation_operator import ObservationOperator
-from .linearsolver import solve_cg, solve_cg_jacobi, solve_cg_LMP, conjGrad
+from .linearsolver import (
+    solve_cg,
+    solve_cg_jacobi,
+    solve_cg_LMP,
+    conjGrad,
+    PreconditionedSolver,
+)
 from typing import Callable, Dict, Tuple, Optional, List, Union
 from . import consistency_tests as ct
 
@@ -20,12 +26,23 @@ class NumericalModel:
         self.n = n
         self.m = m
         self.obs_operator = None
-        self.background_error_cov_inv = None
+        self.background_error_cov_inv = np.zeros((n, n))
         self.background_error_sqrt = None
         self.background = None
         # Type hint
         self.tangent_linear: Callable[[np.ndarray], sla.LinearOperator]
         self.adjoint: Callable[[np.ndarray], sla.LinearOperator]
+
+    def __repr__(self):
+        string = (
+            f"NumericalModel:\n"
+            f"- state_dimension: n={self.n}\n"
+            f"- obs dimension: m={self.m}\n"
+            f"- obs operator initialized: {self.obs_operator is not None}\n"
+            f"- background set: {self.background is not None}\n"
+            f"- observations set: {self.obs is not None}"
+        )
+        return string
 
     def set_obs(self, y: np.ndarray) -> None:
         """Set the observations
@@ -143,6 +160,8 @@ class NumericalModel:
             raise RuntimeError(
                 f"Background error covariance matrix or background value not set"
             )
+        except TypeError as te:
+            return 0
 
     def cost_function(self, x: np.ndarray) -> np.ndarray:
         """Computes the 4DVar cost function
@@ -270,6 +289,9 @@ class NumericalModel:
         # slogdet, cond = np.linalg.slogdet(GtG), np.linalg.cond(GtG) ## TODO: caution to rm
         # if cond > 1e3:   # TODO: SAME
         #     prec = None # TODO: SAME
+
+        if isinstance(prec, PreconditionedSolver):
+            return prec(GtG, b, x, maxiter=iter_inner)
         if prec is None:
             return solve_cg(GtG, b, maxiter=iter_inner)
         elif prec == "jacobi":
@@ -407,6 +429,9 @@ class NumericalModel:
         elif isinstance(prec, dict):
             prec_name = prec["prec_name"]
             prec_type = prec["prec_type"]
+        elif isinstance(prec, PreconditionedSolver):
+            prec_name = prec
+            prec_type = "custom"
         elif prec is None:
             prec_name = None
             prec_type = None

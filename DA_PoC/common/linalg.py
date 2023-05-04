@@ -25,7 +25,7 @@ def randomised_eigval_ritzit(A, r, l):
     G = np.random.normal(size=(n, (r + l)))
     G_3 = la.qr(G)[0]
     Y_3 = A @ G_3
-    Z_3, U_3 = la.qr(Y_3)
+    Z_3, R_3 = la.qr(Y_3)
     K_3 = R_3 @ R_3.T
     w, v = la.eigh(K_3)
     W_3 = v[:, ::-1]

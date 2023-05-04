@@ -183,7 +183,7 @@ class SWModel:
                 )
         ite = 0
         if pbar:
-            iterable = tqdm.tqdm(self.iterate_steps(), total=n_steps)
+            iterable = tqdm.tqdm(self.iterate_steps(), total=n_steps, leave=False)
         else:
             iterable = self.iterate_steps()
 

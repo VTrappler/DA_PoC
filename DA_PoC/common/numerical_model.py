@@ -13,7 +13,7 @@ from .linearsolver import (
 from typing import Callable, Dict, Tuple, Optional, List, Union
 from . import consistency_tests as ct
 
-Preconditioner = Dict | str
+Preconditioner = Union[Dict, str]
 
 
 class NumericalModel:
@@ -150,17 +150,13 @@ class NumericalModel:
         :return: Cost associated with background error
         :rtype: float
         """
-        try:
+        if self.background is not None:
             return (
                 (x - self.background).T
                 @ self.background_error_cov_inv
                 @ (x - self.background)
             )
-        except NameError as e:
-            raise RuntimeError(
-                f"Background error covariance matrix or background value not set"
-            )
-        except TypeError as te:
+        else:
             return 0
 
     def cost_function(self, x: np.ndarray) -> np.ndarray:

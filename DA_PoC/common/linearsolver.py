@@ -1,3 +1,4 @@
+from typing import Tuple
 import warnings
 import numpy as np
 
@@ -13,7 +14,7 @@ class OrthogonalProjector:
 
 def conjGrad(
     A: np.ndarray, x: np.ndarray, b: np.ndarray, tol: float, maxiter: int, verbose=False
-):
+) -> Tuple[np.ndarray, dict]:
     """Solves Ax = b with Conjugate Gradient method
 
     :param A: Matrix to inverse
@@ -28,8 +29,8 @@ def conjGrad(
     :type maxiter: int
     :param verbose: _description_, defaults to False
     :type verbose: bool, optional
-    :return: _description_
-    :rtype: _type_
+    :return: Tuple of the found solution and dict of diagnostics
+    :rtype: Tuple
     """
     r = b - A.dot(x)
     p = r.copy()

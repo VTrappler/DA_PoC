@@ -348,19 +348,6 @@ def solve_cg_LMP(A, b, r, maxiter=None, verbose=False):
 #     return x, result_dict
 
 
-class PreconditionedSolver:
-    def __init__(self, tol: float = 1e-8, maxiter: int = 100):
-        self.tol = tol
-        self.maxiter = maxiter
-
-    def __call__(
-        self, A: np.ndarray, b: np.ndarray, x: np.ndarray, maxiter: int = None
-    ):
-        warnings.warn("Subclass to create preconditioner, no preconditioning with this")
-        if maxiter is not None:
-            self.maxiter = maxiter
-        return conjGrad(A, x, b, tol=self.tol, maxiter=self.maxiter)
-
 
 if __name__ == "__main__":
     n = 500

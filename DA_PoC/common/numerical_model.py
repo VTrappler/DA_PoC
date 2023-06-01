@@ -8,8 +8,8 @@ from .linearsolver import (
     solve_cg_jacobi,
     solve_cg_LMP,
     conjGrad,
-    PreconditionedSolver,
 )
+from .preconditioned_solvers import PreconditionedSolver
 from typing import Callable, Dict, Tuple, Optional, List, Union
 from . import consistency_tests as ct
 

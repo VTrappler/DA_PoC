@@ -7,11 +7,12 @@ It is organized in different submodules
 
  - **filters**
 
-    Common filters for Data Assimilation
+    Common methods for Data Assimilation
 
  - **dynamical systems**
 
     Interface numerical models with DA methods
 
  - **common**
-    linear algebra tools for, and other utilities
+ - 
+    linear algebra tools, and other utilities
